@@ -1,0 +1,33 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration files
+local.properties
+
+# Android Studio / IntelliJ files
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+*.iml
+*.ipr
+*.iws
+
+# JNI / Native build artifacts
+.externalNativeBuild/
+.cxx/
+capture/
+
+# Model files & SDK zips (large files)
+*.zip
+app/src/main/assets/*.onnx
+app/src/main/assets/*.pt
+
+# Log files
+*.log
+
+# Android Profiler
+*.hprof

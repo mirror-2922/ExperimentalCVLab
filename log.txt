@@ -1,0 +1,16 @@
+
+2026-01-09 23:12:06.671  7845-7845  System.err              com.example.beautyapp                W  java.lang.IllegalArgumentException: Provided camera selector unable to resolve a camera for the given use case
+2026-01-09 23:12:06.671  7845-7845  System.err              com.example.beautyapp                W  	at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.java:476)
+2026-01-09 23:12:06.671  7845-7845  System.err              com.example.beautyapp                W  	at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.java:363)
+2026-01-09 23:12:06.671  7845-7845  System.err              com.example.beautyapp                W  	at com.example.beautyapp.ui.CameraScreenKt$CameraProcessor$1.invoke$lambda$2(CameraScreen.kt:257)
+2026-01-09 23:12:06.671  7845-7845  System.err              com.example.beautyapp                W  	at com.example.beautyapp.ui.CameraScreenKt$CameraProcessor$1.$r8$lambda$_jA4Lj5HC-JCu3QDdF4ZnrgcDRM(Unknown Source:0)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at com.example.beautyapp.ui.CameraScreenKt$CameraProcessor$1$$ExternalSyntheticLambda0.run(Unknown Source:12)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at android.os.Handler.handleCallback(Handler.java:995)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at android.os.Handler.dispatchMessage(Handler.java:103)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at android.os.Looper.loopOnce(Looper.java:248)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at android.os.Looper.loop(Looper.java:338)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at android.app.ActivityThread.main(ActivityThread.java:9067)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at java.lang.reflect.Method.invoke(Native Method)
+2026-01-09 23:12:06.672  7845-7845  System.err              com.example.beautyapp                W  	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:593)
+2026-01-09 23:12:06.673  7845-7869  Camera2CameraImpl       com.example.beautyapp                D  {Camera@7584180[id=10]} Releasing session in state OPENED
+2026-01-09 23:12:06.673  7845-7845  System.err              com.example.beautyapp                W  	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:932)
