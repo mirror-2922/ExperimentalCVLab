@@ -6,6 +6,7 @@ import android.util.Size
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import java.io.File
+import kotlin.math.min
 
 enum class AppMode { Camera, AI, FACE }
 
@@ -29,8 +30,18 @@ data class YoloResultData(
     val box: List<Int> // [x, y, w, h]
 )
 
+data class CameraDeviceInfo(
+    val id: String,
+    val label: String,
+    val maxResolution: String
+)
+
 class BeautyViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("beauty_prefs", Context.MODE_PRIVATE)
+
+    // Camera Settings
+    var selectedCameraId by mutableStateOf(prefs.getString("selected_camera_id", null))
+    val backCameras = mutableStateListOf<CameraDeviceInfo>()
 
     // Appearance
     var isDarkTheme by mutableStateOf(prefs.getBoolean("dark_theme", false))
@@ -41,6 +52,23 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var backendResolutionScaling by mutableStateOf(prefs.getBoolean("backend_scaling", false))
     var targetBackendWidth by mutableStateOf(prefs.getInt("backend_width", 640))
     
+    val standardInferenceWidths = listOf(320, 480, 640, 720, 800, 960, 1024, 1280)
+    
+    fun getAvailableInferenceWidths(): List<Int> {
+        val parts = cameraResolution.split("x")
+        if (parts.size < 2) return listOf(640)
+        val minSide = min(parts[0].toInt(), parts[1].toInt())
+        return standardInferenceWidths.filter { it <= minSide }
+    }
+
+    fun updateInferenceWidthConstraint() {
+        val available = getAvailableInferenceWidths()
+        if (available.isNotEmpty() && targetBackendWidth !in available) {
+            targetBackendWidth = available.last()
+            saveSettings()
+        }
+    }
+
     // Performance Info
     var showDebugInfo by mutableStateOf(true)
     var currentFps by mutableStateOf(0f)
@@ -51,7 +79,6 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var actualCameraSize by mutableStateOf("0x0")
     var actualBackendSize by mutableStateOf("0x0")
 
-    // Hardware Usage (Simulated or via System APIs)
     var cpuUsage by mutableStateOf(0f)
     var gpuUsage by mutableStateOf(0f)
     var npuUsage by mutableStateOf(0f)
@@ -66,8 +93,6 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
 
     // ML Kit Results
     val detectedFaces = mutableStateListOf<FaceResult>()
-    
-    // YOLO Results
     val detectedYoloObjects = mutableStateListOf<YoloResultData>()
 
     // YOLO Config
@@ -131,6 +156,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
             putFloat("yfloat_iou", yoloIoU)
             putString("current_model_id", currentModelId)
             putInt("lens_facing", lensFacing)
+            putString("selected_camera_id", selectedCameraId)
             apply()
         }
     }

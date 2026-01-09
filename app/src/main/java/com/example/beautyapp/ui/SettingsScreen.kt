@@ -8,7 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -20,6 +20,8 @@ import com.example.beautyapp.viewmodel.BeautyViewModel
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
     val scrollState = rememberScrollState()
+    var showCameraDialog by remember { mutableStateOf(false) }
+    var showBackendWidthDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -57,9 +59,31 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 })
             }
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // AI Settings Section
+            // Camera Hardware Section
+            Text("Camera Hardware", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            
+            ListItem(
+                headlineContent = { Text("Active Rear Camera") },
+                supportingContent = { 
+                    val camName = viewModel.backCameras.find { it.id == viewModel.selectedCameraId }?.label ?: "Default (Logic)"
+                    Text("Selected: $camName") 
+                },
+                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                modifier = Modifier.clickable { showCameraDialog = true }
+            )
+
+            ListItem(
+                headlineContent = { Text("Capture Resolution") },
+                supportingContent = { Text("Selected: ${viewModel.cameraResolution} (Actual: ${viewModel.actualCameraSize})") },
+                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                modifier = Modifier.clickable { viewModel.showResolutionDialog = true }
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // AI Inference Section
             Text("AI Inference", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
             ListItem(
@@ -69,75 +93,36 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 modifier = Modifier.clickable { navController.navigate("model_management") }
             )
 
-            ListItem(
-                headlineContent = { Text("Detection Classes") },
-                supportingContent = { Text("${viewModel.selectedYoloClasses.size} objects active") },
-                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                modifier = Modifier.clickable { navController.navigate("yolo_objects") }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Sensitivity Control", style = MaterialTheme.typography.bodyMedium)
-            Text("Confidence: ${(viewModel.yoloConfidence * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
-            Slider(
-                value = viewModel.yoloConfidence, 
-                onValueChange = { viewModel.yoloConfidence = it },
-                onValueChangeFinished = { viewModel.saveSettings() }
-            )
-            Text("IoU: ${(viewModel.yoloIoU * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
-            Slider(
-                value = viewModel.yoloIoU, 
-                onValueChange = { viewModel.yoloIoU = it },
-                onValueChangeFinished = { viewModel.saveSettings() }
-            )
-
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-            // Camera & Backend Section
-            Text("Processing & Backend", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            
-            ListItem(
-                headlineContent = { Text("Capture Resolution") },
-                supportingContent = { Text("Selected: ${viewModel.cameraResolution} (Actual: ${viewModel.actualCameraSize})") },
-                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                modifier = Modifier.clickable { viewModel.showResolutionDialog = true }
-            )
-
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Independent Inference Resolution", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Decouple preview and processing resolution to boost performance.",
+                        "Run AI at a specific width to optimize performance.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(checked = viewModel.backendResolutionScaling, onCheckedChange = { 
                     viewModel.backendResolutionScaling = it 
+                    if (it) viewModel.updateInferenceWidthConstraint()
                     viewModel.saveSettings()
                 })
             }
 
             if (viewModel.backendResolutionScaling) {
-                Text("Target Processing Width: ${viewModel.targetBackendWidth}px", style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = viewModel.targetBackendWidth.toFloat(),
-                    onValueChange = { viewModel.targetBackendWidth = it.toInt() },
-                    onValueChangeFinished = { viewModel.saveSettings() },
-                    valueRange = 320f..1280f,
-                    steps = 3
+                ListItem(
+                    headlineContent = { Text("Target Inference Width") },
+                    supportingContent = { Text("Selected: ${viewModel.targetBackendWidth}px") },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                    modifier = Modifier.clickable { showBackendWidthDialog = true }
                 )
             }
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // Debug & Performance Section
-            Text("Performance", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text("Overlay Performance Metrics", modifier = Modifier.weight(1f))
-                Switch(checked = viewModel.showDebugInfo, onCheckedChange = { viewModel.showDebugInfo = it })
-            }
-
+            // Backend Section
+            Text("Performance & Backends", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            
             Text("Inference Engine", style = MaterialTheme.typography.bodyMedium)
             val engines = listOf("OpenCV", "ONNXRuntime")
             FlowRow(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -173,8 +158,77 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("BeautyApp v1.1 | YOLO12n", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("BeautyApp v1.3 | Performance Pro", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
+    }
+
+    // Inference Width Selection Dialog
+    if (showBackendWidthDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackendWidthDialog = false },
+            title = { Text("Select Inference Width") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    val available = viewModel.getAvailableInferenceWidths()
+                    available.forEach { width ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                viewModel.targetBackendWidth = width
+                                viewModel.saveSettings()
+                                showBackendWidthDialog = false
+                            }.padding(12.dp)
+                        ) {
+                            RadioButton(selected = (width == viewModel.targetBackendWidth), onClick = null)
+                            Text("${width}px", modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                    if (available.isEmpty()) {
+                        Text("No specific width options for this capture resolution.", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // Camera Selection Dialog
+    if (showCameraDialog) {
+        AlertDialog(
+            onDismissRequest = { showCameraDialog = false },
+            title = { Text("Select Physical Rear Camera") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            viewModel.selectedCameraId = null
+                            showCameraDialog = false
+                        }.padding(12.dp)
+                    ) {
+                        RadioButton(selected = (viewModel.selectedCameraId == null), onClick = null)
+                        Text("System Default (Logical)", modifier = Modifier.padding(start = 8.dp))
+                    }
+
+                    viewModel.backCameras.forEach { cam ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                viewModel.selectedCameraId = cam.id
+                                showCameraDialog = false
+                            }.padding(12.dp)
+                        ) {
+                            RadioButton(selected = (cam.id == viewModel.selectedCameraId), onClick = null)
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text(cam.label)
+                                Text("Max Res: ${cam.maxResolution}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
     }
 
     if (viewModel.showResolutionDialog) {
@@ -186,14 +240,12 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                     viewModel.availableResolutions.forEach { res ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.cameraResolution = res
-                                    viewModel.showResolutionDialog = false
-                                    viewModel.saveSettings()
-                                }
-                                .padding(12.dp)
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                viewModel.cameraResolution = res
+                                viewModel.updateInferenceWidthConstraint() // Re-check inference width
+                                viewModel.saveSettings()
+                                viewModel.showResolutionDialog = false
+                            }.padding(12.dp)
                         ) {
                             RadioButton(selected = (res == viewModel.cameraResolution), onClick = null)
                             Text(res, modifier = Modifier.padding(start = 8.dp))
