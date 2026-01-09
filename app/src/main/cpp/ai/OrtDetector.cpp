@@ -139,28 +139,13 @@ vector<YoloResult> OrtDetector::detect(Mat& frame, float confThreshold, float io
     NMSBoxes(boxes, confidences, confThreshold, iouThreshold, indices);
 
     for (int idx : indices) {
-        Rect box = boxes[idx];
-        float conf = confidences[idx];
-        int classId = class_ids[idx];
-        string label = classNames[classId];
-
-        rectangle(frame, box, Scalar(255, 100, 0, 255), 6); // ORT uses Orange for distinction
-        
-        string labelConf = label + " (ORT) " + to_string(int(conf * 100)) + "%";
-        int baseLine;
-        Size labelSize = getTextSize(labelConf, FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseLine);
-        int labelY = max(box.y, labelSize.height);
-        
-        rectangle(frame, Point(box.x, labelY - labelSize.height), Point(box.x + labelSize.width, labelY + baseLine), Scalar(255, 100, 0, 255), FILLED);
-        putText(frame, labelConf, Point(box.x, labelY), FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255, 255), 3);
-
         YoloResult res;
-        res.label = label;
-        res.confidence = conf;
-        res.x = box.x;
-        res.y = box.y;
-        res.width = box.width;
-        res.height = box.height;
+        res.label = classNames[class_ids[idx]];
+        res.confidence = confidences[idx];
+        res.x = boxes[idx].x;
+        res.y = boxes[idx].y;
+        res.width = boxes[idx].width;
+        res.height = boxes[idx].height;
         results.push_back(res);
     }
 

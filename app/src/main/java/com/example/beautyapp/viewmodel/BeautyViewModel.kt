@@ -23,6 +23,12 @@ data class ModelInfo(
     var downloadProgress: Float = 0f
 )
 
+data class YoloResultData(
+    val label: String,
+    val confidence: Float,
+    val box: List<Int> // [x, y, w, h]
+)
+
 class BeautyViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("beauty_prefs", Context.MODE_PRIVATE)
 
@@ -55,6 +61,9 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
 
     // ML Kit Results
     val detectedFaces = mutableStateListOf<FaceResult>()
+    
+    // YOLO Results
+    val detectedYoloObjects = mutableStateListOf<YoloResultData>()
 
     // YOLO Config
     var yoloConfidence by mutableStateOf(prefs.getFloat("yolo_conf", 0.5f))
@@ -114,7 +123,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
             putString("hardware_backend", hardwareBackend)
             putString("inference_engine", inferenceEngine)
             putFloat("yolo_conf", yoloConfidence)
-            putFloat("yolo_iou", yoloIoU)
+            putFloat("yfloat_iou", yoloIoU)
             putString("current_model_id", currentModelId)
             putInt("lens_facing", lensFacing)
             apply()
