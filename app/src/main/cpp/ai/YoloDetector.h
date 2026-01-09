@@ -28,3 +28,23 @@ private:
     const int netInputWidth = 640;
     const int netInputHeight = 640;
 };
+
+// ONNX Runtime implementation
+class OrtDetector : public InferenceEngine {
+public:
+    OrtDetector();
+    ~OrtDetector() override;
+    bool loadModel(const std::string& modelPath) override;
+    void setBackend(const std::string& backendName) override;
+    std::vector<YoloResult> detect(cv::Mat& frame, float confThreshold, float iouThreshold, const std::vector<int>& allowedClasses) override;
+
+private:
+    void* env = nullptr;
+    void* session = nullptr;
+    void* session_options = nullptr;
+    
+    bool isLoaded = false;
+    std::vector<std::string> classNames;
+    std::vector<const char*> inputNames;
+    std::vector<const char*> outputNames;
+};

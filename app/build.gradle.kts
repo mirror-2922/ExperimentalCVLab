@@ -1,18 +1,20 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
     namespace = "com.example.beautyapp"
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.beautyapp"
         minSdk = 26
-        targetSdk = 33
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        ndkVersion = "28.2.13676358"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -21,7 +23,13 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags("-std=c++17")
+                arguments("-DANDROID_STL=c++_shared")
+                // Provide hints for manually locating onnxruntime prefab if needed
             }
+        }
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
         }
     }
 
@@ -29,9 +37,7 @@ android {
         abi {
             isEnable = true
             reset()
-            // 包含所有主流架构
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            // 生成一个包含所有架构的通用 APK
             isUniversalApk = true
         }
     }
@@ -45,25 +51,19 @@ android {
                 "proguard-rules.pro"
             )
         }
-        debug {
-            // Optional: even for debug, we can strip unused native libs
-            // but let's focus on abiFilters first as it is the main gain.
-        }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
+        prefab = true // Crucial for Maven-based Native libs
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.4.3"
-    }
-    packagingOptions {
+    packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -87,7 +87,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
     
-    // OpenCV
+    // OpenCV via Maven (AAR with Prefab support)
     implementation(libs.opencv)
     
     // AI Inference & Networking
@@ -99,8 +99,8 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-    implementation("androidx.navigation:navigation-compose:2.5.3")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

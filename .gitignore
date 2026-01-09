@@ -1,5 +1,6 @@
 # Gradle files
 .gradle/
+.gradle_home/
 build/
 
 # Local configuration files
@@ -25,6 +26,7 @@ capture/
 *.zip
 app/src/main/assets/*.onnx
 app/src/main/assets/*.pt
+opencv-sdk/
 
 # Log files
 *.log
