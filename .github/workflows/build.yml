@@ -30,6 +30,12 @@ jobs:
       # Dependency extraction tasks (extractOrtAar, extractOpenCvAar) will run automatically
       run: ./gradlew assembleDebug --stacktrace --no-daemon
 
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: beautyapp-apks
+        path: app/build/outputs/apk/debug/*.apk
+
     - name: Extract Commit Info
       id: commit_info
       run: |
