@@ -179,7 +179,9 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
                             Text("FPS: ${"%.1f".format(viewModel.currentFps)}", color = Color.Green, style = MaterialTheme.typography.labelLarge)
                             Text("Cap: ${viewModel.actualCameraSize}", color = Color.White, style = MaterialTheme.typography.labelSmall)
                             Text("Proc: ${viewModel.actualBackendSize}", color = Color.Yellow, style = MaterialTheme.typography.labelSmall)
-                            Text("AI: ${viewModel.currentModelId}", color = Color.Cyan, style = MaterialTheme.typography.labelSmall)
+                            Text("AI: ${viewModel.currentModelId} (${viewModel.inferenceEngine})", color = Color.Cyan, style = MaterialTheme.typography.labelSmall)
+                            Text("Backend: ${viewModel.hardwareBackend}", color = Color.Magenta, style = MaterialTheme.typography.labelSmall)
+                            Text("Latency: ${viewModel.inferenceTime}ms", color = Color.White, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

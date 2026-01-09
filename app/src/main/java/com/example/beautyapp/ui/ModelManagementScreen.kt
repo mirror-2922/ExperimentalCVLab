@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.navigation.NavController
 import com.example.beautyapp.util.ModelManager
 import com.example.beautyapp.viewmodel.BeautyViewModel
@@ -68,6 +69,7 @@ fun ModelManagementScreen(navController: NavController, viewModel: BeautyViewMod
                         }
                     },
                     onDownload = {
+                        Toast.makeText(context, "Starting download: ${model.name}", Toast.LENGTH_SHORT).show()
                         ModelManager.downloadModel(
                             context, model.url, "${model.id}.onnx",
                             onProgress = { progress ->
@@ -78,11 +80,19 @@ fun ModelManagementScreen(navController: NavController, viewModel: BeautyViewMod
                             },
                             onComplete = { success ->
                                 viewModel.updateDownloadedStatus()
+                                if (success) {
+                                    Toast.makeText(context, "Download complete: ${model.name}", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Download failed: ${model.name}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         )
                     },
                     onDelete = {
-                        ModelManager.deleteModel(context, "${model.id}.onnx")
+                        val deleted = ModelManager.deleteModel(context, "${model.id}.onnx")
+                        if (deleted) {
+                            Toast.makeText(context, "Model removed", Toast.LENGTH_SHORT).show()
+                        }
                         viewModel.updateDownloadedStatus()
                     }
                 )
