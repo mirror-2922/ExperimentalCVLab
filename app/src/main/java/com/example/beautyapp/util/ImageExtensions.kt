@@ -9,7 +9,7 @@ import androidx.camera.core.ImageProxy
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 
-fun ImageProxy.toBitmap(): Bitmap? {
+fun ImageProxy.toBitmapFiltered(): Bitmap? {
     if (format == 1 || format == 42) { // RGBA_8888
         val buffer = planes[0].buffer
         val bytes = ByteArray(buffer.remaining())

@@ -1,12 +1,13 @@
 package com.example.beautyapp.ui.camera
 
 import android.graphics.Bitmap
-import android.util.Log
 import android.util.Size
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -36,7 +37,7 @@ import org.opencv.imgproc.Imgproc
 import java.util.concurrent.Executors
 import kotlin.random.Random
 
-@OptIn(ExperimentalCamera2Interop::class)
+@androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
 @Composable
 fun CameraView(viewModel: BeautyViewModel) {
     val context = LocalContext.current
@@ -81,8 +82,13 @@ fun CameraView(viewModel: BeautyViewModel) {
             if (!cameraProvider.hasCamera(selector)) return@Runnable
             cameraProvider.unbindAll()
 
+            // Modern Resolution Selector
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setResolutionStrategy(ResolutionStrategy(targetCaptureSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
+                .build()
+
             val imageAnalysis = ImageAnalysis.Builder()
-                .setTargetResolution(targetCaptureSize)
+                .setResolutionSelector(resolutionSelector)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
@@ -122,7 +128,8 @@ fun CameraView(viewModel: BeautyViewModel) {
                         } else previewMat.copyTo(aiMat)
                         
                         viewModel.actualBackendSize = "${aiMat.cols()}x${aiMat.rows()}"
-                        val jsonResult = nativeLib.yoloInference(aiMat.nativeObjAddr, viewModel.yoloConfidence, viewModel.yoloIoU, viewModel.selectedYoloClasses.map { viewModel.allCOCOClasses.indexOf(it) }.filter { it >= 0 }.toIntArray())
+                        val activeIds = viewModel.selectedYoloClasses.map { viewModel.allCOCOClasses.indexOf(it) }.filter { it >= 0 }.toIntArray()
+                        val jsonResult = nativeLib.yoloInference(aiMat.nativeObjAddr, viewModel.yoloConfidence, viewModel.yoloIoU, activeIds)
                         
                         val results = mutableListOf<YoloResultData>()
                         val jsonArray = JSONArray(jsonResult)

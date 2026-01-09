@@ -2,16 +2,11 @@ cmake_minimum_required(VERSION 3.22.1)
 
 project("beautyapp")
 
-# OpenCV still uses official Prefab
+# --- Official OpenCV Integration via Prefab ---
 find_package(OpenCV REQUIRED CONFIG)
 
-# ONNX Runtime - Official Reference Mode (via Extracted AAR)
-# Headers: <aar>/headers
-# Libs: <aar>/jni/<abi>/libonnxruntime.so
-message(STATUS "Integrating ORT from path: ${ORT_PATH}")
-
+# --- Manual ONNX Runtime Integration (Extracted AAR) ---
 include_directories(SYSTEM ${ORT_PATH}/headers)
-
 add_library(ort_lib SHARED IMPORTED)
 set_target_properties(ort_lib PROPERTIES IMPORTED_LOCATION
     ${ORT_PATH}/jni/${ANDROID_ABI}/libonnxruntime.so)
@@ -30,7 +25,7 @@ add_library(beautyapp SHARED
 )
 
 target_link_libraries(beautyapp
-        OpenCV::opencv_java4
+        OpenCV::opencv_java4 # Official target name from Prefab
         ort_lib
-        "-Wl,--no-fatal-warnings" # Ignore strict property errors in old libs
+        "-Wl,--no-fatal-warnings"
         log)

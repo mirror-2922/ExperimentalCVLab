@@ -30,10 +30,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Initialize OpenCV
         if (!OpenCVLoader.initDebug()) {
-            Log.e("OpenCV", "Unable to load OpenCV!")
+            Log.e("OpenCV", "OpenCV initialization failed")
         } else {
-            Log.d("OpenCV", "OpenCV loaded successfully.")
+            Log.d("OpenCV", "OpenCV initialization success")
         }
 
         setContent {

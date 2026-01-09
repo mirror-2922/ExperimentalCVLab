@@ -4,7 +4,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-// Official way to extract AAR content if prefab is missing/broken
+// Extract ORT AAR (Still needed as ORT official AAR lacks reliable Prefab config)
 val extractOrtAar by tasks.registering(Copy::class) {
     val configuration = configurations.detachedConfiguration(dependencies.create("com.microsoft.onnxruntime:onnxruntime-android:1.18.0"))
     val aarFile = configuration.resolve().first()
@@ -31,14 +31,11 @@ android {
             cmake {
                 cppFlags("-std=c++17")
                 arguments("-DANDROID_STL=c++_shared")
-                // Use linker flags to ignore non-fatal property errors in older static libs (like OpenCV's ippicv on x86)
-                arguments("-DANDROID_CPP_FEATURES=rtti exceptions")
-                cppFlags("-Wno-unused-command-line-argument")
-                // Pass the extracted path to CMake
+                // Only ORT remains manual
                 arguments("-DORT_PATH=${layout.buildDirectory.dir("intermediates/ort-extracted").get().asFile.absolutePath}")
             }
         }
-        // Removed mandatory abiFilters to support all platforms
+        ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a")) }
     }
 
     splits {
@@ -62,7 +59,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true; prefab = true }
+    buildFeatures {
+        compose = true
+        prefab = true // Crucial for OpenCV Official Prefab
+    }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     externalNativeBuild {
         cmake {
@@ -86,7 +86,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Official OpenCV via Maven (Prefab)
     implementation(libs.opencv)
+    
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.google.mlkit:face-detection:16.1.5")

@@ -27,7 +27,8 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew assembleDebug
+      # Dependency extraction tasks (extractOrtAar, extractOpenCvAar) will run automatically
+      run: ./gradlew assembleDebug --stacktrace --no-daemon
 
     - name: Extract Commit Info
       id: commit_info
@@ -41,15 +42,15 @@ jobs:
       with:
         tag: "dev"
         allowUpdates: true
-        name: "Development Build (Rolling)"
+        name: "BeautyApp Development Build"
         body: |
-          ### 🛠 Automated Build Information
-          - **Commit Message:** ${{ steps.commit_info.outputs.msg }}
-          - **Short SHA:** `${{ steps.commit_info.outputs.sha }}`
-          - **Contributor:** @${{ steps.commit_info.outputs.author }}
-          - **Build Date:** ${{ github.event.head_commit.timestamp }}
+          ### 🛠 Build Details
+          - **Message:** ${{ steps.commit_info.outputs.msg }}
+          - **Commit:** `${{ steps.commit_info.outputs.sha }}`
+          - **By:** @${{ steps.commit_info.outputs.author }}
+          - **Time:** ${{ github.event.head_commit.timestamp }}
           
-          *Note: This is a rolling release for the master branch.*
+          *This build uses automated Maven AAR extraction for OpenCV and ORT.*
         artifacts: "app/build/outputs/apk/debug/*.apk"
         token: ${{ secrets.GITHUB_TOKEN }}
         replacesArtifacts: true
