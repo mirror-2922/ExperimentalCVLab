@@ -1,0 +1,55 @@
+name: Android Build & Release
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug
+
+    - name: Extract Commit Info
+      id: commit_info
+      run: |
+        echo "msg=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+        echo "author=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+        echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Update Dev Release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: "dev"
+        allowUpdates: true
+        name: "Development Build (Rolling)"
+        body: |
+          ### 🛠 Automated Build Information
+          - **Commit Message:** ${{ steps.commit_info.outputs.msg }}
+          - **Short SHA:** `${{ steps.commit_info.outputs.sha }}`
+          - **Contributor:** @${{ steps.commit_info.outputs.author }}
+          - **Build Date:** ${{ github.event.head_commit.timestamp }}
+          
+          *Note: This is a rolling release for the master branch.*
+        artifacts: "app/build/outputs/apk/debug/*.apk"
+        token: ${{ secrets.GITHUB_TOKEN }}
+        replacesArtifacts: true
