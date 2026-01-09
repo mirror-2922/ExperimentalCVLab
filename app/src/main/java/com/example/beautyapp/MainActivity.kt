@@ -22,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.beautyapp.ui.CameraScreen
 import com.example.beautyapp.ui.SettingsScreen
 import com.example.beautyapp.ui.YoloObjectListScreen
+import com.example.beautyapp.ui.ModelManagementScreen
 import com.example.beautyapp.viewmodel.BeautyViewModel
 import org.opencv.android.OpenCVLoader
 
@@ -61,6 +62,9 @@ fun AppNavigation(viewModel: BeautyViewModel) {
         }
         composable("yolo_objects") {
             YoloObjectListScreen(navController, viewModel)
+        }
+        composable("model_management") {
+            ModelManagementScreen(navController, viewModel)
         }
     }
 }

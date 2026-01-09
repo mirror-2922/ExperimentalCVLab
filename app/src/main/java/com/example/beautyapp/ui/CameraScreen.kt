@@ -2,6 +2,7 @@ package com.example.beautyapp.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.graphics.Matrix
@@ -54,28 +55,24 @@ import kotlinx.coroutines.withContext
 fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
     val context = LocalContext.current
 
-    // 1. 动态探测设备支持的所有分辨率挡位
+    // 1. Hardware Resolution Detection
     LaunchedEffect(viewModel.lensFacing) {
         withContext(Dispatchers.IO) {
             try {
                 val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-                val cameraIdList = cameraManager.cameraIdList
-                for (id in cameraIdList) {
-                    val characteristics = cameraManager.getCameraCharacteristics(id)
-                    val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
-                    
-                    val targetFacing = if (viewModel.lensFacing == CameraSelector.LENS_FACING_BACK)
+                cameraManager.cameraIdList.forEach { id ->
+                    val chars = cameraManager.getCameraCharacteristics(id)
+                    val facing = chars.get(CameraCharacteristics.LENS_FACING)
+                    val target = if (viewModel.lensFacing == CameraSelector.LENS_FACING_BACK)
                         CameraCharacteristics.LENS_FACING_BACK else CameraCharacteristics.LENS_FACING_FRONT
                     
-                    if (facing == targetFacing) {
-                        val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                    if (facing == target) {
+                        val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                         val sizes = map?.getOutputSizes(ImageFormat.YUV_420_888)
                         if (sizes != null) {
-                            val sortedRes = sizes
-                                .filter { it.width >= 480 }
+                            val sortedRes = sizes.filter { it.width >= 480 }
                                 .sortedByDescending { it.width * it.height }
-                                .map { "${it.width}x${it.height}" }
-                                .distinct()
+                                .map { "${it.width}x${it.height}" }.distinct()
                             
                             withContext(Dispatchers.Main) {
                                 viewModel.availableResolutions.clear()
@@ -85,36 +82,29 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
                                 }
                             }
                         }
-                        break
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
-    // 2. 模型加载逻辑
-    LaunchedEffect(Unit) {
-        if (!viewModel.isLoading) {
-            viewModel.isLoading = true
-            withContext(Dispatchers.IO) {
-                var initSuccess = false
-                try {
-                    val modelName = "yolo12s.onnx"
-                    val modelFile = File(context.filesDir, modelName)
-                    if (!modelFile.exists()) {
-                        context.assets.open(modelName).use { input ->
-                            FileOutputStream(modelFile).use { output -> input.copyTo(output) }
-                        }
-                    }
-                    initSuccess = NativeLib().initYolo(modelFile.absolutePath)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                withContext(Dispatchers.Main) {
-                    viewModel.isLoading = false
-                    if (initSuccess) Toast.makeText(context, "AI Engine Initialized", Toast.LENGTH_SHORT).show()
+    // 2. Model Loading logic (Reactive to model choice)
+    LaunchedEffect(viewModel.currentModelId) {
+        viewModel.isLoading = true
+        withContext(Dispatchers.IO) {
+            val modelFile = File(context.filesDir, "${viewModel.currentModelId}.onnx")
+            var initSuccess = false
+            
+            if (modelFile.exists()) {
+                initSuccess = NativeLib().initYolo(modelFile.absolutePath)
+            }
+            
+            withContext(Dispatchers.Main) {
+                viewModel.isLoading = false
+                if (initSuccess) {
+                    Toast.makeText(context, "AI Loaded: ${viewModel.currentModelId}", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Model not ready. Please download in settings.", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -189,7 +179,7 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
                             Text("FPS: ${"%.1f".format(viewModel.currentFps)}", color = Color.Green, style = MaterialTheme.typography.labelLarge)
                             Text("Cap: ${viewModel.actualCameraSize}", color = Color.White, style = MaterialTheme.typography.labelSmall)
                             Text("Proc: ${viewModel.actualBackendSize}", color = Color.Yellow, style = MaterialTheme.typography.labelSmall)
-                            Text("Latency: ${viewModel.inferenceTime}ms", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                            Text("AI: ${viewModel.currentModelId}", color = Color.Cyan, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -325,7 +315,7 @@ fun CameraProcessor(viewModel: BeautyViewModel) {
             try {
                 cameraProvider.bindToLifecycle(lifecycleOwner, selector, imageAnalysis)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("Camera", "Bind failed", e)
             }
         }
         cameraProviderFuture.addListener(listener, ContextCompat.getMainExecutor(context))

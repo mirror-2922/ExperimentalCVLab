@@ -2,11 +2,12 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <memory>
 #include "yolo_result.h"
 #include "YoloDetector.h"
-#include <memory>
 
-extern std::unique_ptr<YoloDetector> detector;
+extern std::unique_ptr<InferenceEngine> detector;
 
 bool initYolo(const char* modelPath);
+void switchEngine(const std::string& engineName);
 std::vector<YoloResult> runYoloInference(long matAddr, float confThreshold, float iouThreshold, const std::vector<int>& allowedClasses);

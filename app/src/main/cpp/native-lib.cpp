@@ -119,6 +119,13 @@ Java_com_example_beautyapp_NativeLib_initYolo(JNIEnv *env, jobject, jstring mode
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_example_beautyapp_NativeLib_setInferenceEngine(JNIEnv *env, jobject, jstring engine) {
+    const char* e = env->GetStringUTFChars(engine, nullptr);
+    switchEngine(std::string(e));
+    env->ReleaseStringUTFChars(engine, e);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_example_beautyapp_NativeLib_setHardwareBackend(JNIEnv *env, jobject, jstring backend) {
     const char* b = env->GetStringUTFChars(backend, nullptr);
     if (detector) {

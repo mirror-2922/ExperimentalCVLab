@@ -22,6 +22,7 @@ class NativeLib {
     
     // AI
     external fun initYolo(modelPath: String): Boolean
+    external fun setInferenceEngine(engine: String)
     external fun setHardwareBackend(backend: String)
     external fun yoloInference(matAddr: Long, confidence: Float, iou: Float, activeClassIds: IntArray): String
 

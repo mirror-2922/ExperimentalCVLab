@@ -90,6 +90,10 @@ dependencies {
     // OpenCV
     implementation(libs.opencv)
     
+    // AI Inference & Networking
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+
     // CameraX
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)

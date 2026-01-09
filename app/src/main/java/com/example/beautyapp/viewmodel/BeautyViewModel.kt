@@ -1,35 +1,48 @@
 package com.example.beautyapp.viewmodel
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
 import android.util.Size
+import androidx.compose.runtime.*
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 
-enum class AppMode {
-    Camera, AI
-}
+enum class AppMode { Camera, AI }
 
-class BeautyViewModel : ViewModel() {
-    // 基础设置
-    var isDarkTheme by mutableStateOf(false)
-    var useDynamicColor by mutableStateOf(true)
+data class ModelInfo(
+    val id: String,
+    val name: String,
+    val url: String,
+    val description: String,
+    var isDownloaded: Boolean = false,
+    var downloadProgress: Float = 0f
+)
+
+class BeautyViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefs = application.getSharedPreferences("beauty_prefs", Context.MODE_PRIVATE)
+
+    // Basic Settings
+    var isDarkTheme by mutableStateOf(prefs.getBoolean("dark_theme", false))
+    var useDynamicColor by mutableStateOf(prefs.getBoolean("dynamic_color", true))
     
-    // 分辨率设置
-    var cameraResolution by mutableStateOf("1280x720")
-    var backendResolutionScaling by mutableStateOf(false) // "保留前端分辨率" 开关
-    var targetBackendWidth by mutableStateOf(640)
+    // Resolution
+    var cameraResolution by mutableStateOf(prefs.getString("camera_res", "1280x720") ?: "1280x720")
+    var backendResolutionScaling by mutableStateOf(prefs.getBoolean("backend_scaling", false))
+    var targetBackendWidth by mutableStateOf(prefs.getInt("backend_width", 640))
     
-    // 性能监控
+    // Performance
     var showDebugInfo by mutableStateOf(true)
     var currentFps by mutableStateOf(0f)
     var inferenceTime by mutableStateOf(0L)
-    var hardwareBackend by mutableStateOf("CPU")
+    var hardwareBackend by mutableStateOf(prefs.getString("hardware_backend", "CPU") ?: "CPU")
+    var inferenceEngine by mutableStateOf(prefs.getString("inference_engine", "OpenCV") ?: "OpenCV") // OpenCV, ONNXRuntime
     var actualCameraSize by mutableStateOf("0x0")
     var actualBackendSize by mutableStateOf("0x0")
 
-    // 状态
+    // State
     var currentMode by mutableStateOf(AppMode.Camera)
     var selectedFilter by mutableStateOf("Normal")
     var showFilterDialog by mutableStateOf(false)
@@ -37,9 +50,10 @@ class BeautyViewModel : ViewModel() {
     var lensFacing by mutableStateOf(androidx.camera.core.CameraSelector.LENS_FACING_BACK)
     var isLoading by mutableStateOf(false)
 
-    // YOLO 配置
-    var yoloConfidence by mutableStateOf(0.5f)
-    var yoloIoU by mutableStateOf(0.45f)
+    // YOLO Config
+    var yoloConfidence by mutableStateOf(prefs.getFloat("yolo_conf", 0.5f))
+    var yoloIoU by mutableStateOf(prefs.getFloat("yolo_iou", 0.45f))
+    
     val allCOCOClasses = listOf(
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
         "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -53,8 +67,43 @@ class BeautyViewModel : ViewModel() {
     )
     val selectedYoloClasses = mutableStateListOf<String>().apply { addAll(allCOCOClasses) }
 
-    val availableResolutions = mutableStateListOf<String>()
-    val filters = listOf("Normal", "Beauty", "Dehaze", "Underwater", "Stage")
+    // Model Management
+    val availableModels = mutableStateListOf(
+        ModelInfo("yolov8n", "YOLOv8 Nano", "https://huggingface.co/unity/inference-engine-yolo/resolve/main/models/yolov8n.onnx", "Classic small YOLO model"),
+        ModelInfo("yolo11n", "YOLOv11 Nano", "https://huggingface.co/unity/inference-engine-yolo/resolve/main/models/yolo11n.onnx", "Improved performance"),
+        ModelInfo("yolo12n", "YOLOv12 Nano", "https://huggingface.co/unity/inference-engine-yolo/resolve/main/models/yolo12n.onnx", "Latest high-speed model"),
+        ModelInfo("yolo12s", "YOLOv12 Small", "https://huggingface.co/unity/inference-engine-yolo/resolve/main/models/yolo12s.onnx", "Higher accuracy")
+    )
+    
+    var currentModelId by mutableStateOf(prefs.getString("current_model_id", "yolo12n") ?: "yolo12n")
+    
+    init {
+        updateDownloadedStatus()
+    }
+
+    fun updateDownloadedStatus() {
+        val updatedList = availableModels.map { model ->
+            val file = File(getApplication<Application>().filesDir, "${model.id}.onnx")
+            model.copy(isDownloaded = file.exists())
+        }
+        availableModels.clear()
+        availableModels.addAll(updatedList)
+    }
+
+    fun saveSettings() {
+        prefs.edit().apply {
+            putBoolean("dark_theme", isDarkTheme)
+            putBoolean("dynamic_color", useDynamicColor)
+            putString("camera_res", cameraResolution)
+            putBoolean("backend_scaling", backendResolutionScaling)
+            putInt("backend_width", targetBackendWidth)
+            putString("hardware_backend", hardwareBackend)
+            putFloat("yolo_conf", yoloConfidence)
+            putFloat("yolo_iou", yoloIoU)
+            putString("current_model_id", currentModelId)
+            apply()
+        }
+    }
 
     fun toggleYoloClass(className: String) {
         if (selectedYoloClasses.contains(className)) selectedYoloClasses.remove(className)
@@ -65,4 +114,7 @@ class BeautyViewModel : ViewModel() {
         val parts = cameraResolution.split("x")
         return Size(parts[0].toInt(), parts[1].toInt())
     }
+
+    val availableResolutions = mutableStateListOf<String>()
+    val filters = listOf("Normal", "Beauty", "Dehaze", "Underwater", "Stage")
 }

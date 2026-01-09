@@ -6,7 +6,7 @@ using namespace cv;
 using namespace std;
 using namespace cv::dnn;
 
-YoloDetector::YoloDetector() : isLoaded(false) {
+OpenCVDetector::OpenCVDetector() : isLoaded(false) {
     classNames = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
         "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -20,39 +20,36 @@ YoloDetector::YoloDetector() : isLoaded(false) {
     };
 }
 
-bool YoloDetector::loadModel(const string& modelPath) {
+bool OpenCVDetector::loadModel(const string& modelPath) {
     try {
         net = readNet(modelPath);
         net.setPreferableBackend(DNN_BACKEND_OPENCV);
         net.setPreferableTarget(DNN_TARGET_CPU);
         isLoaded = true;
-        __android_log_print(ANDROID_LOG_DEBUG, "YoloDetector", "Model loaded from %s", modelPath.c_str());
+        __android_log_print(ANDROID_LOG_DEBUG, "OpenCVDetector", "Model loaded from %s", modelPath.c_str());
     } catch (const cv::Exception& e) {
-        __android_log_print(ANDROID_LOG_ERROR, "YoloDetector", "Load error: %s", e.what());
+        __android_log_print(ANDROID_LOG_ERROR, "OpenCVDetector", "Load error: %s", e.what());
         isLoaded = false;
     }
     return isLoaded;
 }
 
-void YoloDetector::setBackend(const string& backendName) {
+void OpenCVDetector::setBackend(const string& backendName) {
     if (!isLoaded) return;
     
     if (backendName == "GPU (OpenCL)") {
         net.setPreferableBackend(DNN_BACKEND_OPENCV);
         net.setPreferableTarget(DNN_TARGET_OPENCL);
     } else if (backendName == "NPU (NNAPI)") {
-        // NNAPI is the standard way to call Android NPU
         net.setPreferableBackend(DNN_BACKEND_DEFAULT);
         net.setPreferableTarget(DNN_TARGET_NPU);
     } else {
-        // Default CPU
         net.setPreferableBackend(DNN_BACKEND_OPENCV);
         net.setPreferableTarget(DNN_TARGET_CPU);
     }
-    __android_log_print(ANDROID_LOG_DEBUG, "YoloDetector", "Backend switched to: %s", backendName.c_str());
 }
 
-vector<YoloResult> YoloDetector::detect(Mat& frame, float confThreshold, float iouThreshold, const vector<int>& allowedClasses) {
+vector<YoloResult> OpenCVDetector::detect(Mat& frame, float confThreshold, float iouThreshold, const vector<int>& allowedClasses) {
     vector<YoloResult> results;
     if (!isLoaded || frame.empty()) return results;
 

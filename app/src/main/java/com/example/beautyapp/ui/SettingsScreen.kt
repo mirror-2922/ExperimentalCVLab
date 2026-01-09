@@ -57,6 +57,13 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             Text("AI Inference", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
             ListItem(
+                headlineContent = { Text("Model Management") },
+                supportingContent = { Text("Current: ${viewModel.availableModels.find { it.id == viewModel.currentModelId }?.name ?: "None"}") },
+                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                modifier = Modifier.clickable { navController.navigate("model_management") }
+            )
+
+            ListItem(
                 headlineContent = { Text("Detection Classes") },
                 supportingContent = { Text("${viewModel.selectedYoloClasses.size} objects active") },
                 trailingContent = { Icon(Icons.Default.ChevronRight, null) },
@@ -111,6 +118,22 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 Text("Overlay Performance Metrics", modifier = Modifier.weight(1f))
                 Switch(checked = viewModel.showDebugInfo, onCheckedChange = { viewModel.showDebugInfo = it })
+            }
+
+            Text("Inference Engine", style = MaterialTheme.typography.bodyMedium)
+            val engines = listOf("OpenCV", "ONNXRuntime")
+            FlowRow(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                engines.forEach { engine ->
+                    FilterChip(
+                        selected = viewModel.inferenceEngine == engine,
+                        onClick = { 
+                            viewModel.inferenceEngine = engine
+                            NativeLib().setInferenceEngine(engine)
+                        },
+                        label = { Text(engine) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
             }
 
             Text("Hardware Acceleration", style = MaterialTheme.typography.bodyMedium)
