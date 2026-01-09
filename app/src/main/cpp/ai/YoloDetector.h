@@ -2,7 +2,13 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <string>
+#include <set>
 #include "yolo_result.h"
+
+// Forward declaration for ORT
+namespace Ort {
+    class Value;
+}
 
 // Base class for different AI backends
 class InferenceEngine {
@@ -39,6 +45,9 @@ public:
     std::vector<YoloResult> detect(cv::Mat& frame, float confThreshold, float iouThreshold, const std::vector<int>& allowedClasses) override;
 
 private:
+    // Change to take Ort::Value reference properly
+    void processResults(Ort::Value& outputTensor, cv::Mat& frame, float confThreshold, float iouThreshold, const std::set<int>& allowedSet, std::vector<YoloResult>& results);
+
     void* env = nullptr;
     void* session = nullptr;
     void* session_options = nullptr;

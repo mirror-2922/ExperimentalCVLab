@@ -20,9 +20,9 @@ import kotlin.math.min
 @Composable
 fun CameraOverlay(viewModel: BeautyViewModel, containerSize: IntSize) {
     val textMeasurer = rememberTextMeasurer()
-    if (containerSize.width <= 0) return
+    if (containerSize.width <= 0 || containerSize.height <= 0) return
 
-    // FIX: Use actualBackendSize for both AI and FACE modes as it represents the detector's coordinate space
+    // SOURCE of detection coordinates is ALWAYS actualBackendSize
     val sourceSizeStr = if (viewModel.currentMode != AppMode.Camera) viewModel.actualBackendSize else viewModel.actualCameraSize
     val parts = sourceSizeStr.split("x")
     if (parts.size < 2) return
@@ -32,7 +32,7 @@ fun CameraOverlay(viewModel: BeautyViewModel, containerSize: IntSize) {
     val containerW = containerSize.width.toFloat()
     val containerH = containerSize.height.toFloat()
     
-    // Scale used to fit the content into the container
+    // Calculate Scale and Offset to match ContentScale.Fit
     val scale = min(containerW / srcW, containerH / srcH)
     val offsetX = (containerW - srcW * scale) / 2f
     val offsetY = (containerH - srcH * scale) / 2f
@@ -40,7 +40,6 @@ fun CameraOverlay(viewModel: BeautyViewModel, containerSize: IntSize) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         when (viewModel.currentMode) {
             AppMode.AI -> {
-                // YOLO results are always relative to actualBackendSize
                 viewModel.detectedYoloObjects.forEach { obj ->
                     val left = offsetX + obj.box[0] * scale
                     val top = offsetY + obj.box[1] * scale
@@ -57,11 +56,16 @@ fun CameraOverlay(viewModel: BeautyViewModel, containerSize: IntSize) {
                 }
             }
             AppMode.FACE -> {
-                // ML Kit results are relative to the rotated capture size (now stored in actualBackendSize)
                 val isFront = viewModel.lensFacing == androidx.camera.core.CameraSelector.LENS_FACING_FRONT
                 viewModel.detectedFaces.forEach { face ->
-                    val left = if (isFront) offsetX + (srcW - face.bounds.right) * scale else offsetX + face.bounds.left * scale
+                    // Correct Mirroring for Front Camera within the content area
+                    val left = if (isFront) {
+                        offsetX + (srcW - face.bounds.right) * scale
+                    } else {
+                        offsetX + face.bounds.left * scale
+                    }
                     val top = offsetY + face.bounds.top * scale
+                    
                     drawRect(
                         color = Color.Yellow, 
                         topLeft = Offset(left, top), 

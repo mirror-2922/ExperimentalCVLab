@@ -45,7 +45,9 @@ fun CameraView(viewModel: BeautyViewModel) {
     val executor = remember { Executors.newSingleThreadExecutor() }
     
     val faceDetector = remember {
-        val options = FaceDetectorOptions.Builder().setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST).build()
+        val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+            .build()
         FaceDetection.getClient(options)
     }
 
@@ -141,7 +143,9 @@ fun CameraView(viewModel: BeautyViewModel) {
                         viewModel.detectedYoloObjects.clear()
                         viewModel.detectedYoloObjects.addAll(results)
                     } else if (viewModel.currentMode == AppMode.FACE) {
-                        // CRITICAL: ML Kit uses un-rotated width/height, but we need to pass the ROTATED coord space to Overlay
+                        // ML Kit coordinates are relative to the input image (unrotated)
+                        // But we tell ML Kit the rotation, so it returns coordinates corrected for that rotation.
+                        // We store the coordinate space ML Kit is operating in.
                         val isRotated = rotation == 90 || rotation == 270
                         val detectorW = if (isRotated) imageProxy.height else imageProxy.width
                         val detectorH = if (isRotated) imageProxy.width else imageProxy.height
@@ -150,7 +154,6 @@ fun CameraView(viewModel: BeautyViewModel) {
                         val mediaImage = imageProxy.image
                         if (mediaImage != null) {
                             val inputImage = InputImage.fromMediaImage(mediaImage, rotation)
-                            // Use pure Java Latch to wait for ML Kit results
                             val latch = CountDownLatch(1)
                             faceDetector.process(inputImage)
                                 .addOnSuccessListener { faces ->
@@ -159,6 +162,7 @@ fun CameraView(viewModel: BeautyViewModel) {
                                 }
                                 .addOnCompleteListener { latch.countDown() }
                             
+                            // Prevent SIGSEGV by waiting for detector to finish before closing imageProxy
                             latch.await(500, TimeUnit.MILLISECONDS)
                         }
                     } else {
@@ -173,18 +177,25 @@ fun CameraView(viewModel: BeautyViewModel) {
                         viewModel.actualBackendSize = viewModel.actualCameraSize
                     }
 
-                    if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {
-                        outputBitmap = Bitmap.createBitmap(previewMat.cols(), previewMat.rows(), Bitmap.Config.ARGB_8888)
+                    // --- BITMAP RENDER SAFE CHECK ---
+                    if (previewMat.cols() > 0 && previewMat.rows() > 0) {
+                        if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {
+                            outputBitmap = Bitmap.createBitmap(previewMat.cols(), previewMat.rows(), Bitmap.Config.ARGB_8888)
+                        }
+                        Utils.matToBitmap(previewMat, outputBitmap)
+                        
+                        val endTime = System.currentTimeMillis()
+                        val duration = endTime - lastFrameTime
+                        lastFrameTime = endTime
+                        viewModel.inferenceTime = endTime - startTime
+                        if (duration > 0) viewModel.currentFps = 0.9f * viewModel.currentFps + 0.1f * (1000f / duration)
+                        bitmapState = outputBitmap
                     }
-                    Utils.matToBitmap(previewMat, outputBitmap)
-                    
-                    val endTime = System.currentTimeMillis()
-                    val duration = endTime - lastFrameTime
-                    lastFrameTime = endTime
-                    viewModel.inferenceTime = endTime - startTime
-                    if (duration > 0) viewModel.currentFps = 0.9f * viewModel.currentFps + 0.1f * (1000f / duration)
-                    bitmapState = outputBitmap
-                } catch (e: Exception) { e.printStackTrace() } finally { imageProxy.close() }
+                } catch (e: Exception) { 
+                    e.printStackTrace() 
+                } finally { 
+                    imageProxy.close() 
+                }
             }
             try { cameraProvider.bindToLifecycle(lifecycleOwner, selector, imageAnalysis) } catch (e: Exception) { e.printStackTrace() }
         }
@@ -192,7 +203,16 @@ fun CameraView(viewModel: BeautyViewModel) {
         onDispose { cameraProviderFuture.get().unbindAll() }
     }
 
-    DisposableEffect(Unit) { onDispose { executor.shutdown(); rgbaMat.release(); captureMat.release(); previewMat.release(); aiMat.release(); faceDetector.close() } }
+    DisposableEffect(Unit) {
+        onDispose {
+            executor.shutdown()
+            rgbaMat.release()
+            captureMat.release()
+            previewMat.release()
+            aiMat.release()
+            faceDetector.close()
+        }
+    }
 
     if (bitmapState != null) {
         Image(bitmap = bitmapState!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)

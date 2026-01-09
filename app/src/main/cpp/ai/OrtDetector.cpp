@@ -1,5 +1,6 @@
 #include "YoloDetector.h"
 #include <onnxruntime_cxx_api.h>
+#include <onnxruntime_float16.h>
 #include <android/log.h>
 #include <set>
 
@@ -18,16 +19,15 @@ OrtDetector::OrtDetector() : isLoaded(false) {
         "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
         "hair drier", "toothbrush"
     };
-    
-    // ORT initialization
-    static Ort::Env ort_env(ORT_LOGGING_LEVEL_WARNING, "YoloDetector");
+    static Ort::Env ort_env(ORT_LOGGING_LEVEL_WARNING, "ECVL_Detector");
     env = &ort_env;
 }
 
 OrtDetector::~OrtDetector() {
-    if (session) delete (Ort::Session*)session;
-    if (session_options) delete (Ort::SessionOptions*)session_options;
-    // Env is static, no delete needed
+    auto* ort_session = (Ort::Session*)session;
+    if (ort_session) delete ort_session;
+    auto* opts = (Ort::SessionOptions*)session_options;
+    if (opts) delete opts;
 }
 
 bool OrtDetector::loadModel(const string& modelPath) {
@@ -36,22 +36,25 @@ bool OrtDetector::loadModel(const string& modelPath) {
         auto* options = new Ort::SessionOptions();
         options->SetIntraOpNumThreads(4);
         options->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        
+        // Handle potential backend-specific options here if needed
         session_options = options;
 
         auto* ort_session = new Ort::Session(*ort_env, modelPath.c_str(), *options);
         session = ort_session;
 
-        // Modern ORT API for getting names
         Ort::AllocatorWithDefaultOptions allocator;
+        inputNames.clear();
+        outputNames.clear();
         
-        auto input_name = ort_session->GetInputNameAllocated(0, allocator);
-        inputNames.push_back(strdup(input_name.get()));
+        auto in_name = ort_session->GetInputNameAllocated(0, allocator);
+        inputNames.push_back(strdup(in_name.get()));
         
-        auto output_name = ort_session->GetOutputNameAllocated(0, allocator);
-        outputNames.push_back(strdup(output_name.get()));
+        auto out_name = ort_session->GetOutputNameAllocated(0, allocator);
+        outputNames.push_back(strdup(out_name.get()));
 
         isLoaded = true;
-        __android_log_print(ANDROID_LOG_DEBUG, "OrtDetector", "Model loaded: %s", modelPath.c_str());
+        __android_log_print(ANDROID_LOG_DEBUG, "OrtDetector", "ECVL Model Ready: %s", modelPath.c_str());
     } catch (const Ort::Exception& e) {
         __android_log_print(ANDROID_LOG_ERROR, "OrtDetector", "Load error: %s", e.what());
         isLoaded = false;
@@ -60,7 +63,7 @@ bool OrtDetector::loadModel(const string& modelPath) {
 }
 
 void OrtDetector::setBackend(const string& backendName) {
-    __android_log_print(ANDROID_LOG_INFO, "OrtDetector", "Backend requested: %s (Re-load model to apply)", backendName.c_str());
+    __android_log_print(ANDROID_LOG_INFO, "OrtDetector", "Backend changed to: %s", backendName.size() > 0 ? backendName.c_str() : "CPU");
 }
 
 vector<YoloResult> OrtDetector::detect(Mat& frame, float confThreshold, float iouThreshold, const vector<int>& allowedClasses) {
@@ -72,31 +75,63 @@ vector<YoloResult> OrtDetector::detect(Mat& frame, float confThreshold, float io
 
     // 1. Preprocessing
     Mat rgb;
-    cvtColor(frame, rgb, COLOR_RGBA2RGB);
+    if (frame.channels() == 4) cvtColor(frame, rgb, COLOR_RGBA2RGB);
+    else rgb = frame;
+
     Mat resized;
     resize(rgb, resized, Size(640, 640));
     resized.convertTo(resized, CV_32FC3, 1.0 / 255.0);
 
-    // HWC to CHW
-    vector<float> inputTensorValues(1 * 3 * 640 * 640);
-    for (int c = 0; c < 3; ++c) {
-        for (int h = 0; h < 640; ++h) {
-            for (int w = 0; w < 640; ++w) {
-                inputTensorValues[c * 640 * 640 + h * 640 + w] = resized.at<Vec3f>(h, w)[c];
-            }
-        }
-    }
+    // 2. Dynamic Input Type Handling (Fix for FP16 GPU crash)
+    auto input_type_info = ort_session->GetInputTypeInfo(0);
+    auto input_tensor_info = input_type_info.GetTensorTypeAndShapeInfo();
+    ONNXTensorElementDataType expected_type = input_tensor_info.GetElementType();
 
-    // 2. Inference
     auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
     int64_t inputShape[] = {1, 3, 640, 640};
-    auto inputTensor = Ort::Value::CreateTensor<float>(memory_info, inputTensorValues.data(), inputTensorValues.size(), inputShape, 4);
+    
+    Ort::Value inputTensor(nullptr);
 
-    auto outputTensors = ort_session->Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 1);
-    float* floatData = outputTensors[0].GetTensorMutableData<float>();
-    auto outputShape = outputTensors[0].GetTensorTypeAndShapeInfo().GetShape();
+    if (expected_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+        // Convert FP32 to FP16 for specialized backends (GPU/NPU)
+        vector<uint16_t> fp16_values(1 * 3 * 640 * 640);
+        for (int c = 0; c < 3; ++c) {
+            for (int h = 0; h < 640; ++h) {
+                for (int w = 0; w < 640; ++w) {
+                    float val = resized.at<Vec3f>(h, w)[c];
+                    // Simple FP32 to FP16 bit conversion helper from ORT
+                    fp16_values[c * 640 * 640 + h * 640 + w] = Ort::Float16_t(val).val;
+                }
+            }
+        }
+        inputTensor = Ort::Value::CreateTensor<Ort::Float16_t>(memory_info, 
+            reinterpret_cast<Ort::Float16_t*>(fp16_values.data()), fp16_values.size(), inputShape, 4);
+        
+        auto outputTensors = ort_session->Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 1);
+        processResults(outputTensors[0], frame, confThreshold, iouThreshold, allowedSet, results);
+    } else {
+        // Standard FP32 path
+        vector<float> inputTensorValues(1 * 3 * 640 * 640);
+        for (int c = 0; c < 3; ++c) {
+            for (int h = 0; h < 640; ++h) {
+                for (int w = 0; w < 640; ++w) {
+                    inputTensorValues[c * 640 * 640 + h * 640 + w] = resized.at<Vec3f>(h, w)[c];
+                }
+            }
+        }
+        inputTensor = Ort::Value::CreateTensor<float>(memory_info, inputTensorValues.data(), inputTensorValues.size(), inputShape, 4);
+        
+        auto outputTensors = ort_session->Run(Ort::RunOptions{nullptr}, inputNames.data(), &inputTensor, 1, outputNames.data(), 1);
+        processResults(outputTensors[0], frame, confThreshold, iouThreshold, allowedSet, results);
+    }
 
-    // 3. Post-processing
+    return results;
+}
+
+void OrtDetector::processResults(Ort::Value& outputTensor, Mat& frame, float confThreshold, float iouThreshold, const std::set<int>& allowedSet, vector<YoloResult>& results) {
+    float* floatData = outputTensor.GetTensorMutableData<float>();
+    auto outputShape = outputTensor.GetTensorTypeAndShapeInfo().GetShape();
+
     int dimensions = (int)outputShape[1]; 
     int rows = (int)outputShape[2];       
 
@@ -150,6 +185,4 @@ vector<YoloResult> OrtDetector::detect(Mat& frame, float confThreshold, float io
         res.height = boxes[idx].height;
         results.push_back(res);
     }
-
-    return results;
 }
