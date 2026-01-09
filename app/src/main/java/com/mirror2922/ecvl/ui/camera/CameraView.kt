@@ -33,6 +33,8 @@ import org.opencv.core.Core
 import org.opencv.core.Mat
 import org.opencv.imgproc.Imgproc
 import java.util.concurrent.Executors
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 @Composable
@@ -55,7 +57,6 @@ fun CameraView(viewModel: BeautyViewModel) {
     val aiMat = remember { Mat() }
     var outputBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Target capture size: Use Max of (Preference, AI Target) to ensure data sufficiency
     val targetCaptureSize = remember(viewModel.cameraResolution, viewModel.backendResolutionScaling, viewModel.targetBackendWidth) {
         val prefParts = viewModel.cameraResolution.split("x")
         val prefW = prefParts[0].toInt()
@@ -106,11 +107,8 @@ fun CameraView(viewModel: BeautyViewModel) {
                     }
                     if (viewModel.lensFacing == CameraSelector.LENS_FACING_FRONT) Core.flip(captureMat, captureMat, 1)
                     
-                    // --- PREVIEW BRANCH FIX (Aspect Ratio Preservation) ---
                     val prefParts = viewModel.cameraResolution.split("x")
                     val prefW = prefParts[0].toInt()
-                    
-                    // Calculate Target Height based on ORIGINAL CAPTURE RATIO to avoid stretching
                     val captureRatio = captureMat.rows().toDouble() / captureMat.cols().toDouble()
                     val targetH = (prefW * captureRatio).toInt()
                     
@@ -127,9 +125,7 @@ fun CameraView(viewModel: BeautyViewModel) {
                             val scale = viewModel.targetBackendWidth.toFloat() / captureMat.cols()
                             val aiH = (captureMat.rows() * scale).toInt()
                             Imgproc.resize(captureMat, aiMat, org.opencv.core.Size(viewModel.targetBackendWidth.toDouble(), aiH.toDouble()))
-                        } else {
-                            previewMat.copyTo(aiMat)
-                        }
+                        } else { previewMat.copyTo(aiMat) }
                         
                         viewModel.actualBackendSize = "${aiMat.cols()}x${aiMat.rows()}"
                         val activeIds = viewModel.selectedYoloClasses.map { viewModel.allCOCOClasses.indexOf(it) }.filter { it >= 0 }.toIntArray()
@@ -144,20 +140,27 @@ fun CameraView(viewModel: BeautyViewModel) {
                         }
                         viewModel.detectedYoloObjects.clear()
                         viewModel.detectedYoloObjects.addAll(results)
-                        
-                        viewModel.cpuUsage = if (viewModel.hardwareBackend == "CPU") Random.nextFloat() * 0.4f + 0.3f else 0.1f
-                        viewModel.gpuUsage = if (viewModel.hardwareBackend.contains("GPU")) Random.nextFloat() * 0.5f + 0.4f else 0.05f
-                        viewModel.npuUsage = if (viewModel.hardwareBackend.contains("NPU")) Random.nextFloat() * 0.6f + 0.3f else 0.01f
                     } else if (viewModel.currentMode == AppMode.FACE) {
+                        // CRITICAL: ML Kit uses un-rotated width/height, but we need to pass the ROTATED coord space to Overlay
+                        val isRotated = rotation == 90 || rotation == 270
+                        val detectorW = if (isRotated) imageProxy.height else imageProxy.width
+                        val detectorH = if (isRotated) imageProxy.width else imageProxy.height
+                        viewModel.actualBackendSize = "${detectorW}x${detectorH}"
+
                         val mediaImage = imageProxy.image
                         if (mediaImage != null) {
-                            faceDetector.process(InputImage.fromMediaImage(mediaImage, rotation)).addOnSuccessListener { faces ->
-                                viewModel.detectedFaces.clear()
-                                faces.forEach { viewModel.detectedFaces.add(FaceResult(it.boundingBox, it.trackingId)) }
-                            }
+                            val inputImage = InputImage.fromMediaImage(mediaImage, rotation)
+                            // Use pure Java Latch to wait for ML Kit results
+                            val latch = CountDownLatch(1)
+                            faceDetector.process(inputImage)
+                                .addOnSuccessListener { faces ->
+                                    viewModel.detectedFaces.clear()
+                                    faces.forEach { viewModel.detectedFaces.add(FaceResult(it.boundingBox, it.trackingId)) }
+                                }
+                                .addOnCompleteListener { latch.countDown() }
+                            
+                            latch.await(500, TimeUnit.MILLISECONDS)
                         }
-                        viewModel.actualBackendSize = viewModel.actualCameraSize
-                        viewModel.cpuUsage = Random.nextFloat() * 0.3f + 0.2f
                     } else {
                         if (viewModel.selectedFilter != "Normal") {
                             when (viewModel.selectedFilter) {
@@ -168,7 +171,6 @@ fun CameraView(viewModel: BeautyViewModel) {
                             }
                         }
                         viewModel.actualBackendSize = viewModel.actualCameraSize
-                        viewModel.cpuUsage = 0.1f
                     }
 
                     if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {

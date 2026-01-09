@@ -95,10 +95,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
     
-    implementation("org.opencv:opencv:4.9.0")
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+        implementation("org.opencv:opencv:4.9.0")
     
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
+        implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+    
+        implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.google.mlkit:face-detection:16.1.5")
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
