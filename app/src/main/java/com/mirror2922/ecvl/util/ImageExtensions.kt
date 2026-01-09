@@ -1,4 +1,4 @@
-package com.example.beautyapp.util
+package com.mirror2922.ecvl.util
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

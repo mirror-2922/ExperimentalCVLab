@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui
+package com.mirror2922.ecvl.ui
 
 import android.Manifest
 import android.content.Context
@@ -23,13 +23,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import com.example.beautyapp.NativeLib
-import com.example.beautyapp.ui.camera.CameraOverlay
-import com.example.beautyapp.ui.camera.CameraView
-import com.example.beautyapp.ui.components.AppHud
-import com.example.beautyapp.viewmodel.AppMode
-import com.example.beautyapp.viewmodel.BeautyViewModel
-import com.example.beautyapp.viewmodel.CameraDeviceInfo
+import com.mirror2922.ecvl.NativeLib
+import com.mirror2922.ecvl.ui.camera.CameraOverlay
+import com.mirror2922.ecvl.ui.camera.CameraView
+import com.mirror2922.ecvl.ui.components.AppHud
+import com.mirror2922.ecvl.viewmodel.AppMode
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.viewmodel.CameraDeviceInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

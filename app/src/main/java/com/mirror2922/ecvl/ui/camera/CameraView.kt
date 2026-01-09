@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui.camera
+package com.mirror2922.ecvl.ui.camera
 
 import android.graphics.Bitmap
 import android.util.Size
@@ -21,11 +21,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.ContextCompat
-import com.example.beautyapp.NativeLib
-import com.example.beautyapp.viewmodel.AppMode
-import com.example.beautyapp.viewmodel.BeautyViewModel
-import com.example.beautyapp.viewmodel.FaceResult
-import com.example.beautyapp.viewmodel.YoloResultData
+import com.mirror2922.ecvl.NativeLib
+import com.mirror2922.ecvl.viewmodel.AppMode
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.viewmodel.FaceResult
+import com.mirror2922.ecvl.viewmodel.YoloResultData
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions

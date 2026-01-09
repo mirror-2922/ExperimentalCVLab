@@ -1,4 +1,4 @@
-package com.example.beautyapp.viewmodel
+package com.mirror2922.ecvl.viewmodel
 
 import android.app.Application
 import android.content.Context
@@ -37,7 +37,7 @@ data class CameraDeviceInfo(
 )
 
 class BeautyViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences("beauty_prefs", Context.MODE_PRIVATE)
+    private val prefs = application.getSharedPreferences("ecvl_prefs", Context.MODE_PRIVATE)
 
     // Camera Settings
     var selectedCameraId by mutableStateOf(prefs.getString("selected_camera_id", null))

@@ -5,7 +5,7 @@
 using namespace cv;
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_beautyapp_NativeLib_yuvToRgba(
+Java_com_mirror2922_ecvl_NativeLib_yuvToRgba(
     JNIEnv* env, jobject,
     jobject yBuffer, jint yRowStride,
     jobject uBuffer, jint uRowStride,

@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui.components
+package com.mirror2922.ecvl.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*

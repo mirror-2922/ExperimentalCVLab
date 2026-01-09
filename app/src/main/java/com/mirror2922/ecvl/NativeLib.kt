@@ -1,4 +1,4 @@
-package com.example.beautyapp
+package com.mirror2922.ecvl
 
 class NativeLib {
 

@@ -48,7 +48,7 @@ jobs:
       with:
         tag: "dev"
         allowUpdates: true
-        name: "BeautyApp Development Build"
+        name: "Experimental CV Lab - Dev Build"
         body: |
           ### 🛠 Build Details
           - **Message:** ${{ steps.commit_info.outputs.msg }}
@@ -56,7 +56,7 @@ jobs:
           - **By:** @${{ steps.commit_info.outputs.author }}
           - **Time:** ${{ github.event.head_commit.timestamp }}
           
-          *This build uses automated Maven AAR extraction for OpenCV and ORT.*
+          *This is an automated build for ECVL.*
         artifacts: "app/build/outputs/apk/debug/*.apk"
         token: ${{ secrets.GITHUB_TOKEN }}
         replacesArtifacts: true

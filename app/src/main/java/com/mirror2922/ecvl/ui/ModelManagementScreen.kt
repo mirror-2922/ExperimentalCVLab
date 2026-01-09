@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui
+package com.mirror2922.ecvl.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -16,9 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.beautyapp.util.ModelManager
-import com.example.beautyapp.viewmodel.BeautyViewModel
-import com.example.beautyapp.viewmodel.ModelInfo
+import com.mirror2922.ecvl.util.ModelManager
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.viewmodel.ModelInfo
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

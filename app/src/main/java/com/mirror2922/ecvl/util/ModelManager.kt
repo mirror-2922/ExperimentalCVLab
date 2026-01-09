@@ -1,4 +1,4 @@
-package com.example.beautyapp.util
+package com.mirror2922.ecvl.util
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
@@ -11,7 +11,6 @@ import java.io.FileOutputStream
 object ModelManager {
     private val client = OkHttpClient()
 
-    // 改为 suspend 函数，利用协程管理线程切换
     suspend fun downloadModel(
         context: Context,
         url: String,
@@ -20,8 +19,8 @@ object ModelManager {
         onComplete: (Boolean) -> Unit
     ) {
         withContext(Dispatchers.IO) {
-            val request = Request.Builder().url(url).build()
             try {
+                val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) {
                     withContext(Dispatchers.Main) { onComplete(false) }
@@ -43,23 +42,15 @@ object ModelManager {
                             totalRead += bytesRead
                             if (totalBytes > 0) {
                                 val progress = totalRead.toFloat() / totalBytes
-                                // 进度更新切回主线程
-                                withContext(Dispatchers.Main) {
-                                    onProgress(progress)
-                                }
+                                withContext(Dispatchers.Main) { onProgress(progress) }
                             }
                         }
                     }
                 }
-                // 成功回调切回主线程
-                withContext(Dispatchers.Main) {
-                    onComplete(true)
-                }
+                withContext(Dispatchers.Main) { onComplete(true) }
             } catch (e: Exception) {
                 e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    onComplete(false)
-                }
+                withContext(Dispatchers.Main) { onComplete(false) }
             }
         }
     }

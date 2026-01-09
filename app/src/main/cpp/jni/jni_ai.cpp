@@ -6,7 +6,7 @@
 #include "../utils/utils.h"
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_example_beautyapp_NativeLib_initYolo(JNIEnv *env, jobject, jstring model_path) {
+Java_com_mirror2922_ecvl_NativeLib_initYolo(JNIEnv *env, jobject, jstring model_path) {
     const char* path = env->GetStringUTFChars(model_path, nullptr);
     bool result = initYolo(path);
     env->ReleaseStringUTFChars(model_path, path);
@@ -14,14 +14,14 @@ Java_com_example_beautyapp_NativeLib_initYolo(JNIEnv *env, jobject, jstring mode
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_beautyapp_NativeLib_setInferenceEngine(JNIEnv *env, jobject, jstring engine) {
+Java_com_mirror2922_ecvl_NativeLib_setInferenceEngine(JNIEnv *env, jobject, jstring engine) {
     const char* e = env->GetStringUTFChars(engine, nullptr);
     switchEngine(std::string(e));
     env->ReleaseStringUTFChars(engine, e);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_beautyapp_NativeLib_setHardwareBackend(JNIEnv *env, jobject, jstring backend) {
+Java_com_mirror2922_ecvl_NativeLib_setHardwareBackend(JNIEnv *env, jobject, jstring backend) {
     const char* b = env->GetStringUTFChars(backend, nullptr);
     if (detector) {
         detector->setBackend(std::string(b));
@@ -30,7 +30,7 @@ Java_com_example_beautyapp_NativeLib_setHardwareBackend(JNIEnv *env, jobject, js
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_beautyapp_NativeLib_yoloInference(JNIEnv *env, jobject, jlong matAddr, jfloat conf, jfloat iou, jintArray activeClassIds) {
+Java_com_mirror2922_ecvl_NativeLib_yoloInference(JNIEnv *env, jobject, jlong matAddr, jfloat conf, jfloat iou, jintArray activeClassIds) {
     std::vector<int> allowedClasses;
     if (activeClassIds != nullptr) {
         jsize len = env->GetArrayLength(activeClassIds);

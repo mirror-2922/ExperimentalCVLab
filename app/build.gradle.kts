@@ -13,15 +13,15 @@ val extractOrtAar by tasks.registering(Copy::class) {
 }
 
 android {
-    namespace = "com.example.beautyapp"
+    namespace = "com.mirror2922.ecvl"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.beautyapp"
+        applicationId = "com.mirror2922.ecvl"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 173
+        versionName = "1.7.3"
         ndkVersion = "28.2.13676358"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

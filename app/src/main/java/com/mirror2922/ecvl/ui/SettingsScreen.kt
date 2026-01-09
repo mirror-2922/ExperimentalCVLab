@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui
+package com.mirror2922.ecvl.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,11 +12,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.beautyapp.NativeLib
-import com.example.beautyapp.ui.components.SettingItem
-import com.example.beautyapp.ui.components.SettingSwitch
-import com.example.beautyapp.ui.components.SelectionDialog
-import com.example.beautyapp.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.NativeLib
+import com.mirror2922.ecvl.ui.components.SettingItem
+import com.mirror2922.ecvl.ui.components.SettingSwitch
+import com.mirror2922.ecvl.ui.components.SelectionDialog
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +107,7 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             BackendSelector(viewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("BeautyApp v1.4 | Modular Build", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("Experimental CV Lab v1.7.3 | Pure Architecture", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
     }
 

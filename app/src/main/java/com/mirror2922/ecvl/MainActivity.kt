@@ -1,4 +1,4 @@
-package com.example.beautyapp
+package com.mirror2922.ecvl
 
 import android.os.Build
 import android.os.Bundle
@@ -19,11 +19,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.beautyapp.ui.CameraScreen
-import com.example.beautyapp.ui.SettingsScreen
-import com.example.beautyapp.ui.YoloObjectListScreen
-import com.example.beautyapp.ui.ModelManagementScreen
-import com.example.beautyapp.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.ui.CameraScreen
+import com.mirror2922.ecvl.ui.SettingsScreen
+import com.mirror2922.ecvl.ui.YoloObjectListScreen
+import com.mirror2922.ecvl.ui.ModelManagementScreen
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 import org.opencv.android.OpenCVLoader
 
 class MainActivity : ComponentActivity() {

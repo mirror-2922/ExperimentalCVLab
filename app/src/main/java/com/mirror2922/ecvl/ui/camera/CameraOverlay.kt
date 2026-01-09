@@ -1,4 +1,4 @@
-package com.example.beautyapp.ui.camera
+package com.mirror2922.ecvl.ui.camera
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,8 +13,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.beautyapp.viewmodel.AppMode
-import com.example.beautyapp.viewmodel.BeautyViewModel
+import com.mirror2922.ecvl.viewmodel.AppMode
+import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 import kotlin.math.min
 
 @Composable
