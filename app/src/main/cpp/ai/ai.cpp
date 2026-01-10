@@ -21,8 +21,10 @@ static vector<int> currentClasses;
 static int currentMode = 0; 
 static string currentFilter = "Normal";
 
-// Binary Result Storage
-static vector<float> binaryResults; // [count, id, conf, x, y, w, h, ...]
+// Detection Results (Binary Buffer)
+// Structure: [count(float), id1, conf1, x1, y1, w1, h1, id2, ...]
+static float detectionBuffer[1024]; 
+static int detectionBufferSize = 0;
 static mutex resultMutex;
 
 static unique_ptr<NativeCamera> nativeCamera;
@@ -75,28 +77,27 @@ vector<YoloResult> runYoloInference(long matAddr, float confThreshold, float iou
 
 void updateDetectionsBinary(const vector<YoloResult>& results) {
     lock_guard<mutex> lock(resultMutex);
-    binaryResults.clear();
-    if (results.empty()) {
-        binaryResults.push_back(0.0f);
-        return;
-    }
-    binaryResults.push_back((float)results.size());
+    detectionBuffer[0] = (float)results.size();
+    int idx = 1;
     for (const auto& res : results) {
-        binaryResults.push_back(0.0f);
-        binaryResults.push_back(res.confidence);
-        binaryResults.push_back(res.x); 
-        binaryResults.push_back(res.y);
-        binaryResults.push_back(res.width);
-        binaryResults.push_back(res.height);
+        if (idx + 6 > 1024) break;
+        detectionBuffer[idx++] = (float)res.class_index;
+        detectionBuffer[idx++] = res.confidence;
+        detectionBuffer[idx++] = res.x;
+        detectionBuffer[idx++] = res.y;
+        detectionBuffer[idx++] = res.width;
+        detectionBuffer[idx++] = res.height;
     }
+    detectionBufferSize = idx;
 }
 
-int getNativeDetectionsBinary(float* outData, int maxCount) {
-    lock_guard<mutex> lock(resultMutex);
-    int count = (int)binaryResults.size();
-    if (count > maxCount) count = maxCount;
-    if (count > 0) memcpy(outData, binaryResults.data(), count * sizeof(float));
-    return count;
+// JNI 专用：获取 Buffer 指针
+float* getDetectionBufferPtr() {
+    return detectionBuffer;
+}
+
+int getDetectionBufferSize() {
+    return detectionBufferSize;
 }
 
 bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface, jobject mlKitSurface) {
@@ -108,7 +109,6 @@ void stopNativeCamera() {
     if (nativeCamera) nativeCamera->close();
 }
 
-// Performance Tracking
 static float lastFps = 0.0f;
 static float lastInferenceTime = 0.0f;
 static int lastWidth = 0;

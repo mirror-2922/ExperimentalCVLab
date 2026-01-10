@@ -128,6 +128,7 @@ vector<YoloResult> OpenCVDetector::detect(Mat& frame, float confThreshold, float
 
     for (int idx : indices) {
         YoloResult res;
+        res.class_index = class_ids[idx];
         res.label = classNames[class_ids[idx]];
         res.confidence = confidences[idx];
         res.x = boxes[idx].x;

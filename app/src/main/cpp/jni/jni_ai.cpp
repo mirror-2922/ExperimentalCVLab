@@ -71,16 +71,14 @@ Java_com_mirror2922_ecvl_NativeLib_stopNativeCamera(JNIEnv *env, jobject) {
     stopNativeCamera();
 }
 
-extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_mirror2922_ecvl_NativeLib_getNativeDetectionsBinary(JNIEnv *env, jobject) {
-    float buffer[100]; // 支持最多 16 个物体 (1 + 16*6 = 97)
-    int count = getNativeDetectionsBinary(buffer, 100);
-    
-    jfloatArray result = env->NewFloatArray(count);
-    if (count > 0) {
-        env->SetFloatArrayRegion(result, 0, count, buffer);
-    }
-    return result;
+extern float* getDetectionBufferPtr();
+extern int getDetectionBufferSize();
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_mirror2922_ecvl_NativeLib_getNativeDetectionsBuffer(JNIEnv *env, jobject) {
+    float* ptr = getDetectionBufferPtr();
+    int sizeInBytes = getDetectionBufferSize() * sizeof(float);
+    return env->NewDirectByteBuffer(ptr, sizeInBytes);
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL

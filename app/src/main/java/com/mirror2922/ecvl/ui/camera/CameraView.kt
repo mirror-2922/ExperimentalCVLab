@@ -23,6 +23,7 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.nio.ByteOrder
 import java.util.concurrent.Executors
 
 @Composable
@@ -37,15 +38,15 @@ fun CameraView(viewModel: BeautyViewModel) {
         FaceDetection.getClient(options)
     }
     
-    // ImageReader used ONLY as a consumer for processed frames from NDK
     val mlKitReader = remember {
         ImageReader.newInstance(640, 640, ImageFormat.YUV_420_888, 2)
     }
 
-    // 1. Data Polling
+    // 1. Reliable Data Polling via ByteBuffer
     LaunchedEffect(Unit) {
         while (isActive) {
             try {
+                // Performance Metrics
                 val perf = nativeLib.getPerfMetricsBinary()
                 if (perf.size >= 4) {
                     viewModel.currentFps = perf[0]
@@ -56,27 +57,37 @@ fun CameraView(viewModel: BeautyViewModel) {
                 
                 viewModel.cpuUsage = HardwareMonitor.getCpuUsage()
                 
+                // Detection Results via zero-copy ByteBuffer
                 if (viewModel.currentMode == AppMode.AI) {
-                    val data = nativeLib.getNativeDetectionsBinary()
-                    if (data.isNotEmpty()) {
-                        val objCount = data[0].toInt()
-                        val detections = mutableListOf<Detection>()
-                        for (i in 0 until objCount) {
-                            val base = 1 + i * 6
-                            if (base + 5 < data.size) {
-                                detections.add(Detection(
-                                    label = viewModel.allCOCOClasses.getOrNull(data[base].toInt()) ?: "Unknown",
-                                    confidence = data[base + 1],
-                                    boundingBox = RectF(
-                                        data[base + 2], data[base + 3],
-                                        data[base + 2] + data[base + 4],
-                                        data[base + 3] + data[base + 5]
-                                    )
-                                ))
+                    val buffer = nativeLib.getNativeDetectionsBuffer()
+                    if (buffer != null) {
+                        buffer.order(ByteOrder.nativeOrder())
+                        val objCount = buffer.getFloat().toInt()
+                        
+                        if (objCount in 1..50) { // Sanity check
+                            val detections = mutableListOf<Detection>()
+                            for (i in 0 until objCount) {
+                                val classIdx = buffer.getFloat().toInt()
+                                val confidence = buffer.getFloat()
+                                val x = buffer.getFloat()
+                                val y = buffer.getFloat()
+                                val w = buffer.getFloat()
+                                val h = buffer.getFloat()
+                                
+                                val label = viewModel.allCOCOClasses.getOrNull(classIdx) ?: "ID:$classIdx"
+                                val detection = Detection(
+                                    label = label,
+                                    confidence = confidence,
+                                    boundingBox = RectF(x, y, x + w, y + h)
+                                )
+                                detections.add(detection)
+                                if (i == 0) Log.d("CameraView", "YOLO: $label [${"%.2f".format(confidence)}] at $x, $y")
                             }
+                            viewModel.detections.clear()
+                            viewModel.detections.addAll(detections)
+                        } else if (objCount == 0) {
+                            viewModel.detections.clear()
                         }
-                        viewModel.detections.clear()
-                        viewModel.detections.addAll(detections)
                     }
                 }
             } catch (e: Exception) {
@@ -86,7 +97,7 @@ fun CameraView(viewModel: BeautyViewModel) {
         }
     }
 
-    // 2. ML Kit Listener (Consuming from NDK distributed stream)
+    // 2. ML Kit (unchanged logic, just ensuring listener is clean)
     DisposableEffect(mlKitReader) {
         val listener = ImageReader.OnImageAvailableListener { reader ->
             val image = try { reader.acquireLatestImage() } catch (e: Exception) { null } ?: return@OnImageAvailableListener
@@ -114,42 +125,25 @@ fun CameraView(viewModel: BeautyViewModel) {
             image.close()
         }
         mlKitReader.setOnImageAvailableListener(listener, Handler(android.os.Looper.getMainLooper()))
-        onDispose { 
-            mlKitReader.setOnImageAvailableListener(null, null)
-        }
+        onDispose { mlKitReader.setOnImageAvailableListener(null, null) }
     }
 
-    // 3. Camera Lifecycle
+    // 3. Lifecycle
     DisposableEffect(viewModel.lensFacing, viewModel.cameraResolution, viewfinderSurface) {
         val vs = viewfinderSurface
         if (vs != null) {
             val resParts = viewModel.cameraResolution.split("x")
-            val facing = if (viewModel.lensFacing == 1) 1 else 0
-            nativeLib.startNativeCamera(facing, resParts[0].toInt(), resParts[1].toInt(), vs, mlKitReader.surface)
-            
-            nativeLib.updateNativeConfig(
-                if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0,
-                viewModel.selectedFilter
-            )
+            nativeLib.startNativeCamera(if (viewModel.lensFacing == 1) 1 else 0, resParts[0].toInt(), resParts[1].toInt(), vs, mlKitReader.surface)
+            nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0, viewModel.selectedFilter)
         }
-        
-        onDispose {
-            nativeLib.stopNativeCamera()
-        }
+        onDispose { nativeLib.stopNativeCamera() }
     }
 
-    // 4. Config Sync
     LaunchedEffect(viewModel.currentMode, viewModel.selectedFilter) {
-        nativeLib.updateNativeConfig(
-            if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0,
-            viewModel.selectedFilter
-        )
-        if (viewModel.currentMode == AppMode.Camera) {
-            viewModel.detections.clear()
-        }
+        nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0, viewModel.selectedFilter)
+        if (viewModel.currentMode == AppMode.Camera) viewModel.detections.clear()
     }
 
-    // 5. Native Viewfinder
     AndroidView(
         factory = { ctx ->
             SurfaceView(ctx).apply {

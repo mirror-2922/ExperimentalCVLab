@@ -36,7 +36,7 @@ class NativeLib {
     // NDK Camera Control
     external fun startNativeCamera(facing: Int, width: Int, height: Int, viewfinderSurface: android.view.Surface, mlKitSurface: android.view.Surface): Boolean
     external fun stopNativeCamera()
-    external fun getNativeDetectionsBinary(): FloatArray
+    external fun getNativeDetectionsBuffer(): java.nio.ByteBuffer?
     external fun getPerfMetricsBinary(): FloatArray
     external fun updateNativeConfig(mode: Int, filter: String)
 
