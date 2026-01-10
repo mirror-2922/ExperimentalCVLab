@@ -100,7 +100,7 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             BackendSelector(viewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("Experimental CV Lab v1.8.0 | Refactored Core", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("Experimental CV Lab v1.9.4 | Core Pipeline Overhaul", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
     }
 

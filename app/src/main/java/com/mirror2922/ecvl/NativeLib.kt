@@ -5,11 +5,15 @@ class NativeLib {
     external fun stringFromJNI(): String
 
     external fun applyBeautyFilter(matAddr: Long)
-    
-    // New Filters
     external fun applyDehaze(matAddr: Long)
     external fun applyUnderwater(matAddr: Long)
     external fun applyStage(matAddr: Long)
+    external fun applyGray(matAddr: Long)
+    external fun applyHistEq(matAddr: Long)
+    external fun applyBinary(matAddr: Long)
+    external fun applyMorphOpen(matAddr: Long)
+    external fun applyMorphClose(matAddr: Long)
+    external fun applyBlur(matAddr: Long)
 
     // Legacy/Utils
     external fun convertToGray(matAddr: Long)
@@ -17,7 +21,9 @@ class NativeLib {
     external fun binarize(matAddr: Long)
     external fun morphOpen(matAddr: Long)
     external fun morphClose(matAddr: Long)
-    external fun applyBlur(matAddr: Long)
+    external fun morphOpenLegacy(matAddr: Long)
+    external fun morphCloseLegacy(matAddr: Long)
+    external fun applyBlurLegacy(matAddr: Long) // renamed to avoid conflict if any, though JNI names are specific
     external fun recognizeColorBlock(matAddr: Long): String
     
     // AI

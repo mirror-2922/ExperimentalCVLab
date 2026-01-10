@@ -28,20 +28,18 @@ import com.mirror2922.ecvl.NativeLib
 import com.mirror2922.ecvl.viewmodel.AppMode
 import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 import com.mirror2922.ecvl.viewmodel.Detection
-import com.mirror2922.ecvl.viewmodel.YoloResultData
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import org.json.JSONArray
 import org.opencv.android.Utils
 import org.opencv.core.Core
 import org.opencv.core.Mat
 import org.opencv.imgproc.Imgproc
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
-
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
-import java.util.concurrent.CountDownLatch
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -94,8 +92,8 @@ fun CameraView(viewModel: BeautyViewModel) {
             } ?: cameraManager.cameraIdList[0]
 
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
-            val map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
             
+            // Choose resolution
             val targetResParts = viewModel.cameraResolution.split("x")
             val targetSize = Size(targetResParts[0].toInt(), targetResParts[1].toInt())
             val sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
@@ -126,6 +124,7 @@ fun CameraView(viewModel: BeautyViewModel) {
                         Core.flip(rotatedMat, rotatedMat, 1)
                     }
 
+                    // 1:1 Square Crop for YOLO and UI
                     val w = rotatedMat.cols()
                     val h = rotatedMat.rows()
                     val side = min(w, h)
@@ -134,15 +133,18 @@ fun CameraView(viewModel: BeautyViewModel) {
                     val cropRect = org.opencv.core.Rect(xOffset, yOffset, side, side)
                     rotatedMat.submat(cropRect).copyTo(croppedMat)
 
+                    // Resize for Preview
                     val previewW = targetSize.width
                     val previewH = (targetSize.width * (croppedMat.rows().toDouble() / croppedMat.cols())).toInt()
                     Imgproc.resize(croppedMat, previewMat, org.opencv.core.Size(previewW.toDouble(), previewH.toDouble()))
                     viewModel.actualCameraSize = "${previewMat.cols()}x${previewMat.rows()}"
 
+                    // --- Processing Logic ---
+                    
+                    // 1. AI Inference (YOLO)
                     if (viewModel.currentMode == AppMode.AI) {
                         val aiW = if (viewModel.useIndependentAiResolution) viewModel.independentAiWidth else 640
                         val aiH = if (viewModel.useIndependentAiResolution) viewModel.independentAiHeight else aiW
-                        
                         Imgproc.resize(croppedMat, aiMat, org.opencv.core.Size(aiW.toDouble(), aiH.toDouble()))
                         viewModel.actualBackendSize = "${aiMat.cols()}x${aiMat.rows()}"
 
@@ -154,12 +156,10 @@ fun CameraView(viewModel: BeautyViewModel) {
                         for (i in 0 until jsonArray.length()) {
                             val obj = jsonArray.getJSONObject(i)
                             val boxArr = obj.getJSONArray("box")
-                            
                             val normLeft = boxArr.getInt(0).toFloat() / aiMat.cols()
                             val normTop = boxArr.getInt(1).toFloat() / aiMat.rows()
                             val normWidth = boxArr.getInt(2).toFloat() / aiMat.cols()
                             val normHeight = boxArr.getInt(3).toFloat() / aiMat.rows()
-                            
                             newDetections.add(Detection(
                                 label = obj.getString("label"),
                                 confidence = obj.getDouble("conf").toFloat(),
@@ -168,8 +168,12 @@ fun CameraView(viewModel: BeautyViewModel) {
                         }
                         viewModel.detections.clear()
                         viewModel.detections.addAll(newDetections)
-                    } else if (viewModel.currentMode == AppMode.FACE) {
-                        // ML Kit Face Detection on the cropped image
+                    } else {
+                        viewModel.detections.clear()
+                    }
+
+                    // 2. Face Detection (ML Kit)
+                    if (viewModel.currentMode == AppMode.FACE) {
                         if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {
                             outputBitmap = Bitmap.createBitmap(previewMat.cols(), previewMat.rows(), Bitmap.Config.ARGB_8888)
                         }
@@ -192,24 +196,30 @@ fun CameraView(viewModel: BeautyViewModel) {
                                         id = face.trackingId
                                     )
                                 }
-                                viewModel.detections.clear()
                                 viewModel.detections.addAll(newDetections)
                             }
                             .addOnCompleteListener { latch.countDown() }
                         latch.await(500, TimeUnit.MILLISECONDS)
                         viewModel.actualBackendSize = viewModel.actualCameraSize
-                    } else {
-                        if (viewModel.selectedFilter != "Normal") {
-                            when (viewModel.selectedFilter) {
-                                "Beauty" -> nativeLib.applyBeautyFilter(previewMat.nativeObjAddr)
-                                "Dehaze" -> nativeLib.applyDehaze(previewMat.nativeObjAddr)
-                                "Underwater" -> nativeLib.applyUnderwater(previewMat.nativeObjAddr)
-                                "Stage" -> nativeLib.applyStage(previewMat.nativeObjAddr)
-                            }
-                        }
-                        viewModel.detections.clear()
                     }
 
+                    // 3. Apply Filters (Applied to previewMat after optional detections)
+                    if (viewModel.selectedFilter != "Normal") {
+                        when (viewModel.selectedFilter) {
+                            "Beauty" -> nativeLib.applyBeautyFilter(previewMat.nativeObjAddr)
+                            "Dehaze" -> nativeLib.applyDehaze(previewMat.nativeObjAddr)
+                            "Underwater" -> nativeLib.applyUnderwater(previewMat.nativeObjAddr)
+                            "Stage" -> nativeLib.applyStage(previewMat.nativeObjAddr)
+                            "Gray" -> nativeLib.applyGray(previewMat.nativeObjAddr)
+                            "Histogram" -> nativeLib.applyHistEq(previewMat.nativeObjAddr)
+                            "Binary" -> nativeLib.applyBinary(previewMat.nativeObjAddr)
+                            "Morph Open" -> nativeLib.applyMorphOpen(previewMat.nativeObjAddr)
+                            "Morph Close" -> nativeLib.applyMorphClose(previewMat.nativeObjAddr)
+                            "Blur" -> nativeLib.applyBlur(previewMat.nativeObjAddr)
+                        }
+                    }
+
+                    // Render to UI
                     if (previewMat.cols() > 0 && previewMat.rows() > 0) {
                         if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {
                             outputBitmap = Bitmap.createBitmap(previewMat.cols(), previewMat.rows(), Bitmap.Config.ARGB_8888)
@@ -235,7 +245,6 @@ fun CameraView(viewModel: BeautyViewModel) {
                 override fun onOpened(camera: CameraDevice) {
                     cameraOpenCloseLock.release()
                     cameraDevice = camera
-                    
                     val surface = reader.surface
                     camera.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
                         override fun onConfigured(session: CameraCaptureSession) {
@@ -249,13 +258,11 @@ fun CameraView(viewModel: BeautyViewModel) {
                         }
                     }, backgroundHandler)
                 }
-
                 override fun onDisconnected(camera: CameraDevice) {
                     cameraOpenCloseLock.release()
                     camera.close()
                     cameraDevice = null
                 }
-
                 override fun onError(camera: CameraDevice, error: Int) {
                     cameraOpenCloseLock.release()
                     camera.close()
@@ -286,9 +293,7 @@ fun CameraView(viewModel: BeautyViewModel) {
 
     DisposableEffect(viewModel.lensFacing, viewModel.cameraResolution) {
         openCamera()
-        onDispose {
-            closeCamera()
-        }
+        onDispose { closeCamera() }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -308,6 +313,7 @@ fun CameraView(viewModel: BeautyViewModel) {
             croppedMat.release()
             previewMat.release()
             aiMat.release()
+            faceDetector.close()
         }
     }
 

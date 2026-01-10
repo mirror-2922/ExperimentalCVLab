@@ -75,6 +75,12 @@ private fun FilterItem(
         "Dehaze" -> Icons.Default.CloudQueue
         "Underwater" -> Icons.Default.Waves
         "Stage" -> Icons.Default.TheaterComedy
+        "Gray" -> Icons.Default.FilterBAndW
+        "Histogram" -> Icons.Default.Contrast
+        "Binary" -> Icons.Default.InvertColors
+        "Morph Open" -> Icons.Default.PhotoFilter
+        "Morph Close" -> Icons.Default.Gradient
+        "Blur" -> Icons.Default.BlurOn
         else -> Icons.Default.AutoFixNormal
     }
 

@@ -164,5 +164,8 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     val availableResolutions = mutableStateListOf<String>()
-    val filters = listOf("Normal", "Beauty", "Dehaze", "Underwater", "Stage")
+    val filters = listOf(
+        "Normal", "Beauty", "Dehaze", "Underwater", "Stage", 
+        "Gray", "Histogram", "Binary", "Morph Open", "Morph Close", "Blur"
+    )
 }

@@ -22,6 +22,38 @@ Java_com_mirror2922_ecvl_NativeLib_applyStage(JNIEnv*, jobject, jlong matAddr) {
     applyStage(getMat(matAddr));
 }
 
+// New Filters matching NativeLib.kt
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyGray(JNIEnv*, jobject, jlong matAddr) {
+    applyGray(getMat(matAddr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyHistEq(JNIEnv*, jobject, jlong matAddr) {
+    applyHistEq(getMat(matAddr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyBinary(JNIEnv*, jobject, jlong matAddr) {
+    applyBinary(getMat(matAddr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyMorphOpen(JNIEnv*, jobject, jlong matAddr) {
+    applyMorphOpen(getMat(matAddr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyMorphClose(JNIEnv*, jobject, jlong matAddr) {
+    applyMorphClose(getMat(matAddr));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_applyBlur(JNIEnv*, jobject, jlong matAddr) {
+    applyBlur(getMat(matAddr));
+}
+
+// Legacy/Utils matching NativeLib.kt
 extern "C" JNIEXPORT void JNICALL
 Java_com_mirror2922_ecvl_NativeLib_convertToGray(JNIEnv*, jobject, jlong matAddr) {
     applyGray(getMat(matAddr));
@@ -38,16 +70,16 @@ Java_com_mirror2922_ecvl_NativeLib_binarize(JNIEnv*, jobject, jlong matAddr) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mirror2922_ecvl_NativeLib_morphOpen(JNIEnv*, jobject, jlong matAddr) {
+Java_com_mirror2922_ecvl_NativeLib_morphOpenLegacy(JNIEnv*, jobject, jlong matAddr) {
     applyMorphOpen(getMat(matAddr));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mirror2922_ecvl_NativeLib_morphClose(JNIEnv*, jobject, jlong matAddr) {
+Java_com_mirror2922_ecvl_NativeLib_morphCloseLegacy(JNIEnv*, jobject, jlong matAddr) {
     applyMorphClose(getMat(matAddr));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mirror2922_ecvl_NativeLib_applyBlur(JNIEnv*, jobject, jlong matAddr) {
+Java_com_mirror2922_ecvl_NativeLib_applyBlurLegacy(JNIEnv*, jobject, jlong matAddr) {
     applyBlur(getMat(matAddr));
 }
