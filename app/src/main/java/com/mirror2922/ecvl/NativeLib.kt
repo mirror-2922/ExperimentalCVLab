@@ -33,6 +33,11 @@ class NativeLib {
     external fun isNpuAvailable(): Boolean
     external fun yoloInference(matAddr: Long, confidence: Float, iou: Float, activeClassIds: IntArray): String
 
+    external fun startNativeCamera(facing: Int, width: Int, height: Int, viewfinderSurface: android.view.Surface): Boolean
+    external fun stopNativeCamera()
+    external fun getNativeDetectionsBinary(): FloatArray
+    external fun updateNativeConfig(mode: Int, filter: String)
+
     // Efficient conversion
     external fun yuvToRgba(
         yPlane: java.nio.ByteBuffer, yRowStride: Int,

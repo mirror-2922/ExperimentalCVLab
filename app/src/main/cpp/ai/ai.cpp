@@ -1,5 +1,6 @@
 #include "ai.h"
 #include "../utils/utils.h"
+#include "../utils/NativeCamera.h"
 #include <memory>
 #include <android/log.h>
 #include <mutex>
@@ -13,35 +14,37 @@ static string lastModelPath = "";
 static string lastEngine = "OpenCV";
 static string lastBackend = "CPU";
 
+// Shared config
+static float currentConf = 0.5f;
+static float currentIoU = 0.45f;
+static vector<int> currentClasses;
+static int currentMode = 0; 
+static string currentFilter = "Normal";
+
+// Binary Result Storage
+static vector<float> binaryResults; // [count, id, conf, x, y, w, h, ...]
+static mutex resultMutex;
+
+static unique_ptr<NativeCamera> nativeCamera;
+
 bool initYolo(const char* modelPath) {
     lock_guard<mutex> lock(detectorMutex);
     lastModelPath = string(modelPath);
     if (!detector) {
-        if (lastEngine == "ONNXRuntime") {
-            detector = make_unique<OrtDetector>();
-        } else {
-            detector = make_unique<OpenCVDetector>();
-        }
+        if (lastEngine == "ONNXRuntime") detector = make_unique<OrtDetector>();
+        else detector = make_unique<OpenCVDetector>();
     }
     bool success = detector->loadModel(modelPath);
-    if (success) {
-        detector->setBackend(lastBackend);
-    }
+    if (success) detector->setBackend(lastBackend);
     return success;
 }
 
 void switchEngine(const string& engineName) {
     lock_guard<mutex> lock(detectorMutex);
     if (lastEngine == engineName && detector) return;
-    
     lastEngine = engineName;
-    if (engineName == "OpenCV") {
-        detector = make_unique<OpenCVDetector>();
-    } else if (engineName == "ONNXRuntime") {
-        detector = make_unique<OrtDetector>();
-        __android_log_print(ANDROID_LOG_INFO, "InferenceEngine", "ONNXRuntime engine successfully initialized");
-    }
-    
+    if (engineName == "OpenCV") detector = make_unique<OpenCVDetector>();
+    else if (engineName == "ONNXRuntime") detector = make_unique<OrtDetector>();
     if (!lastModelPath.empty()) {
         detector->loadModel(lastModelPath);
         detector->setBackend(lastBackend);
@@ -51,27 +54,65 @@ void switchEngine(const string& engineName) {
 void setBackend(const string& backendName) {
     lock_guard<mutex> lock(detectorMutex);
     lastBackend = backendName;
-    if (detector) {
-        detector->setBackend(backendName);
-    }
+    if (detector) detector->setBackend(backendName);
 }
 
 bool isNpuAvailable() {
-    // Basic check for NPU availability
-    // For OpenCV, we can check if TIMVX (commonly used for NPU) is available
-    // or just return true if we want to allow the user to try, 
-    // but here we should be more conservative to avoid crash.
 #ifdef CV_DNN_HAS_TIMVX
     return true;
 #endif
-    // Or check for NNAPI support which DNN_TARGET_NPU might use
     return false; 
 }
 
 vector<YoloResult> runYoloInference(long matAddr, float confThreshold, float iouThreshold, const vector<int>& allowedClasses) {
     lock_guard<mutex> lock(detectorMutex);
-    if (detector) {
-        return detector->detect(getMat(matAddr), confThreshold, iouThreshold, allowedClasses);
-    }
+    currentConf = confThreshold;
+    currentIoU = iouThreshold;
+    currentClasses = allowedClasses;
+    if (detector) return detector->detect(getMat(matAddr), confThreshold, iouThreshold, allowedClasses);
     return {};
 }
+
+// 供 NativeCamera 内部调用，将结果直接转为二进制
+void updateDetectionsBinary(const vector<YoloResult>& results) {
+    lock_guard<mutex> lock(resultMutex);
+    binaryResults.clear();
+    binaryResults.push_back((float)results.size());
+    for (const auto& res : results) {
+        // 我们假设这里已经归一化了，或者由 NativeCamera 完成
+        binaryResults.push_back(0.0f); // 临时 ID，如果需要的话可以从 COCO 映射
+        binaryResults.push_back(res.confidence);
+        binaryResults.push_back(res.x); 
+        binaryResults.push_back(res.y);
+        binaryResults.push_back(res.width);
+        binaryResults.push_back(res.height);
+    }
+}
+
+int getNativeDetectionsBinary(float* outData, int maxCount) {
+    lock_guard<mutex> lock(resultMutex);
+    int count = (int)binaryResults.size();
+    if (count > maxCount) count = maxCount;
+    if (count > 0) memcpy(outData, binaryResults.data(), count * sizeof(float));
+    return count;
+}
+
+bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface) {
+    if (!nativeCamera) nativeCamera = make_unique<NativeCamera>();
+    return nativeCamera->start(facing, width, height, viewfinderSurface);
+}
+
+void stopNativeCamera() {
+    if (nativeCamera) nativeCamera->stop();
+}
+
+void updateNativeConfig(int mode, const string& filter) {
+    currentMode = mode;
+    currentFilter = filter;
+}
+
+int getNativeMode() { return currentMode; }
+string getNativeFilter() { return currentFilter; }
+float getNativeConf() { return currentConf; }
+float getNativeIoU() { return currentIoU; }
+vector<int> getNativeClasses() { return currentClasses; }

@@ -60,3 +60,32 @@ Java_com_mirror2922_ecvl_NativeLib_yoloInference(JNIEnv *env, jobject, jlong mat
     
     return env->NewStringUTF(json.str().c_str());
 }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_mirror2922_ecvl_NativeLib_startNativeCamera(JNIEnv *env, jobject, jint facing, jint width, jint height, jobject viewfinderSurface) {
+    return startNativeCamera(facing, width, height, viewfinderSurface);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_stopNativeCamera(JNIEnv *env, jobject) {
+    stopNativeCamera();
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_mirror2922_ecvl_NativeLib_getNativeDetectionsBinary(JNIEnv *env, jobject) {
+    float buffer[100]; // 支持最多 16 个物体 (1 + 16*6 = 97)
+    int count = getNativeDetectionsBinary(buffer, 100);
+    
+    jfloatArray result = env->NewFloatArray(count);
+    if (count > 0) {
+        env->SetFloatArrayRegion(result, 0, count, buffer);
+    }
+    return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_mirror2922_ecvl_NativeLib_updateNativeConfig(JNIEnv *env, jobject, jint mode, jstring filter) {
+    const char* f = env->GetStringUTFChars(filter, nullptr);
+    updateNativeConfig(mode, std::string(f));
+    env->ReleaseStringUTFChars(filter, f);
+}

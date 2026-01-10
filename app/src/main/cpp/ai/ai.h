@@ -13,3 +13,11 @@ void switchEngine(const std::string& engineName);
 void setBackend(const std::string& backendName);
 bool isNpuAvailable();
 std::vector<YoloResult> runYoloInference(long matAddr, float confThreshold, float iouThreshold, const std::vector<int>& allowedClasses);
+std::vector<YoloResult> runYoloInferenceOnMat(cv::Mat& frame);
+
+bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface);
+void stopNativeCamera();
+int getNativeDetectionsBinary(float* outData, int maxCount);
+void updateNativeConfig(int mode, const std::string& filter);
+int getNativeMode();
+std::string getNativeFilter();

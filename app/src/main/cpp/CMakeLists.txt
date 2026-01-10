@@ -22,10 +22,14 @@ add_library(beautyapp SHARED
     ai/YoloDetector.cpp
     ai/OrtDetector.cpp
     utils/utils.cpp
+    utils/NativeCamera.cpp
 )
 
 target_link_libraries(beautyapp
         OpenCV::opencv_java4 # Official target name from Prefab
         ort_lib
         "-Wl,--no-fatal-warnings"
-        log)
+        log
+        camera2ndk
+        mediandk
+        android)

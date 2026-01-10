@@ -108,13 +108,17 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
                     onClick = { 
                         viewModel.currentMode = AppMode.AI
                         viewModel.showFilterPanel = false
+                        NativeLib().updateNativeConfig(1, viewModel.selectedFilter)
                     }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Camera, null) },
                     label = { Text("Camera") },
                     selected = viewModel.currentMode == AppMode.Camera,
-                    onClick = { viewModel.currentMode = AppMode.Camera }
+                    onClick = { 
+                        viewModel.currentMode = AppMode.Camera 
+                        NativeLib().updateNativeConfig(0, viewModel.selectedFilter)
+                    }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Face, null) },
@@ -123,6 +127,7 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
                     onClick = { 
                         viewModel.currentMode = AppMode.FACE 
                         viewModel.showFilterPanel = false
+                        NativeLib().updateNativeConfig(2, viewModel.selectedFilter)
                     }
                 )
             }

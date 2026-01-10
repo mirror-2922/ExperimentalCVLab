@@ -54,7 +54,15 @@ fun FilterPanel(viewModel: BeautyViewModel, modifier: Modifier = Modifier) {
                         FilterItem(
                             name = filter,
                             isSelected = viewModel.selectedFilter == filter,
-                            onClick = { viewModel.selectedFilter = filter }
+                            onClick = { 
+                                viewModel.selectedFilter = filter
+                                com.mirror2922.ecvl.NativeLib().updateNativeConfig(
+                                    if (viewModel.currentMode == com.mirror2922.ecvl.viewmodel.AppMode.AI) 1 
+                                    else if (viewModel.currentMode == com.mirror2922.ecvl.viewmodel.AppMode.FACE) 2 
+                                    else 0,
+                                    filter
+                                )
+                            }
                         )
                     }
                 }
