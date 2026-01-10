@@ -40,8 +40,7 @@ fun AppHud(viewModel: BeautyViewModel, modifier: Modifier = Modifier) {
                 }
                 AppMode.FACE -> {
                     HudText("Processing", viewModel.actualBackendSize, Color.Yellow)
-                    HudText("Faces", "${viewModel.detectedFaces.size}", Color.Cyan)
-                    // ML Kit usually uses CPU/NPU
+                    HudText("Faces", "${viewModel.detections.size}", Color.Cyan)
                     HudText("CPU Usage", "${(viewModel.cpuUsage * 100).toInt()}%", Color(0xFFFFA500))
                 }
                 AppMode.Camera -> {

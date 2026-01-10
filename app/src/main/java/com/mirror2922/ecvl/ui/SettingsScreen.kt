@@ -15,14 +15,12 @@ import androidx.navigation.NavController
 import com.mirror2922.ecvl.NativeLib
 import com.mirror2922.ecvl.ui.components.SettingItem
 import com.mirror2922.ecvl.ui.components.SettingSwitch
-import com.mirror2922.ecvl.ui.components.SelectionDialog
 import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
     val scrollState = rememberScrollState()
-    var showBackendWidthDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -52,17 +50,10 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 viewModel.useDynamicColor = it 
                 viewModel.saveSettings()
             }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-            SectionTitle("Camera Hardware")
-            
-            SettingItem(
-                title = "Capture Resolution",
-                subtitle = "Selected: ${viewModel.cameraResolution} (Actual: ${viewModel.actualCameraSize})",
-                icon = Icons.Default.ChevronRight,
-                onClick = { viewModel.showResolutionDialog = true }
-            )
+            SettingSwitch("Show Performance HUD", viewModel.showDebugInfo) {
+                viewModel.showDebugInfo = it
+                viewModel.saveSettings()
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
@@ -73,21 +64,6 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 icon = Icons.Default.ChevronRight,
                 onClick = { navController.navigate("model_management") }
             )
-
-            SettingSwitch("Independent Inference Resolution", viewModel.backendResolutionScaling) { 
-                viewModel.backendResolutionScaling = it 
-                if (it) viewModel.updateInferenceWidthConstraint()
-                viewModel.saveSettings()
-            }
-
-            if (viewModel.backendResolutionScaling) {
-                SettingItem(
-                    title = "Target Inference Width",
-                    subtitle = "Selected: ${viewModel.targetBackendWidth}px",
-                    icon = Icons.Default.ChevronRight,
-                    onClick = { showBackendWidthDialog = true }
-                )
-            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
@@ -101,33 +77,9 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             BackendSelector(viewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("Experimental CV Lab v1.7.3 | Pure Architecture", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("Experimental CV Lab v2.1.0 | Isolated Pipeline", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
     }
-
-    SelectionDialog(
-        show = viewModel.showResolutionDialog,
-        onDismiss = { viewModel.showResolutionDialog = false },
-        title = "Select Capture Resolution",
-        items = viewModel.availableResolutions,
-        selectedItem = viewModel.cameraResolution,
-        onItemSelected = { 
-            viewModel.cameraResolution = it
-            viewModel.updateInferenceWidthConstraint()
-            viewModel.saveSettings()
-        },
-        itemLabel = { it }
-    )
-
-    SelectionDialog(
-        show = showBackendWidthDialog,
-        onDismiss = { showBackendWidthDialog = false },
-        title = "Select Inference Width",
-        items = viewModel.getAvailableInferenceWidths(),
-        selectedItem = viewModel.targetBackendWidth,
-        onItemSelected = { viewModel.targetBackendWidth = it; viewModel.saveSettings() },
-        itemLabel = { "${it}px" }
-    )
 }
 
 @Composable
@@ -145,7 +97,7 @@ private fun EngineSelector(viewModel: BeautyViewModel) {
                 selected = viewModel.inferenceEngine == engine,
                 onClick = { 
                     viewModel.inferenceEngine = engine
-                    NativeLib().setInferenceEngine(engine)
+                    NativeLib().switchInferenceEngine(engine)
                     viewModel.saveSettings()
                 },
                 label = { Text(engine) },
@@ -161,14 +113,22 @@ private fun BackendSelector(viewModel: BeautyViewModel) {
     val backends = listOf("CPU", "GPU (OpenCL)", "NPU (NNAPI)")
     FlowRow(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         backends.forEach { backend ->
+            val isEnabled = if (backend == "NPU (NNAPI)") viewModel.isNpuSupported else true
             FilterChip(
                 selected = viewModel.hardwareBackend == backend,
+                enabled = isEnabled,
                 onClick = { 
                     viewModel.hardwareBackend = backend
                     NativeLib().setHardwareBackend(backend)
                     viewModel.saveSettings()
                 },
-                label = { Text(backend) },
+                label = { 
+                    if (isEnabled) {
+                        Text(backend)
+                    } else {
+                        Text("$backend (Unsupported)")
+                    }
+                },
                 modifier = Modifier.padding(end = 8.dp)
             )
         }

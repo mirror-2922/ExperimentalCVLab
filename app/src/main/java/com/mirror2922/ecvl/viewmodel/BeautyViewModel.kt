@@ -10,9 +10,11 @@ import kotlin.math.min
 
 enum class AppMode { Camera, AI, FACE }
 
-data class FaceResult(
-    val bounds: android.graphics.Rect,
-    val trackingId: Int?
+data class Detection(
+    val label: String,
+    val confidence: Float,
+    val boundingBox: android.graphics.RectF,
+    val id: Int? = null
 )
 
 data class ModelInfo(
@@ -24,12 +26,6 @@ data class ModelInfo(
     var downloadProgress: Float = 0f
 )
 
-data class YoloResultData(
-    val label: String,
-    val confidence: Float,
-    val box: List<Int> // [x, y, w, h]
-)
-
 class BeautyViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("ecvl_prefs", Context.MODE_PRIVATE)
 
@@ -37,30 +33,8 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var isDarkTheme by mutableStateOf(prefs.getBoolean("dark_theme", false))
     var useDynamicColor by mutableStateOf(prefs.getBoolean("dynamic_color", true))
     
-    // Resolution
-    var cameraResolution by mutableStateOf(prefs.getString("camera_res", "1280x720") ?: "1280x720")
-    var backendResolutionScaling by mutableStateOf(prefs.getBoolean("backend_scaling", false))
-    var targetBackendWidth by mutableStateOf(prefs.getInt("backend_width", 640))
-    
-    val standardInferenceWidths = listOf(320, 480, 640, 720, 800, 960, 1024, 1280)
-    
-    fun getAvailableInferenceWidths(): List<Int> {
-        val parts = cameraResolution.split("x")
-        if (parts.size < 2) return listOf(640)
-        val minSide = min(parts[0].toInt(), parts[1].toInt())
-        return standardInferenceWidths.filter { it <= minSide }
-    }
-
-    fun updateInferenceWidthConstraint() {
-        val available = getAvailableInferenceWidths()
-        if (available.isNotEmpty() && targetBackendWidth !in available) {
-            targetBackendWidth = available.last()
-            saveSettings()
-        }
-    }
-
     // Performance Info
-    var showDebugInfo by mutableStateOf(true)
+    var showDebugInfo by mutableStateOf(prefs.getBoolean("show_debug_info", true))
     var currentFps by mutableStateOf(0f)
     var inferenceTime by mutableStateOf(0L)
     var hardwareBackend by mutableStateOf(prefs.getString("hardware_backend", "CPU") ?: "CPU")
@@ -72,6 +46,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var cpuUsage by mutableStateOf(0f)
     var gpuUsage by mutableStateOf(0f)
     var npuUsage by mutableStateOf(0f)
+    var isNpuSupported by mutableStateOf(false)
 
     // State
     var currentMode by mutableStateOf(AppMode.Camera)
@@ -82,9 +57,8 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var lensFacing by mutableStateOf(prefs.getInt("lens_facing", androidx.camera.core.CameraSelector.LENS_FACING_BACK))
     var isLoading by mutableStateOf(false)
 
-    // ML Kit Results
-    val detectedFaces = mutableStateListOf<FaceResult>()
-    val detectedYoloObjects = mutableStateListOf<YoloResultData>()
+    // Unified Results
+    val detections = mutableStateListOf<Detection>()
 
     // YOLO Config
     var yoloConfidence by mutableStateOf(prefs.getFloat("yolo_conf", 0.5f))
@@ -115,6 +89,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     
     init {
         updateDownloadedStatus()
+        isNpuSupported = com.mirror2922.ecvl.NativeLib().isNpuAvailable()
     }
 
     fun updateDownloadedStatus() {
@@ -137,9 +112,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
         prefs.edit().apply {
             putBoolean("dark_theme", isDarkTheme)
             putBoolean("dynamic_color", useDynamicColor)
-            putString("camera_res", cameraResolution)
-            putBoolean("backend_scaling", backendResolutionScaling)
-            putInt("backend_width", targetBackendWidth)
+            putBoolean("show_debug_info", showDebugInfo)
             putString("hardware_backend", hardwareBackend)
             putString("inference_engine", inferenceEngine)
             putFloat("yolo_conf", yoloConfidence)
@@ -155,11 +128,9 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
         else selectedYoloClasses.add(className)
     }
     
-    fun getCameraSize(): Size {
-        val parts = cameraResolution.split("x")
-        return Size(parts[0].toInt(), parts[1].toInt())
-    }
-
     val availableResolutions = mutableStateListOf<String>()
-    val filters = listOf("Normal", "Beauty", "Dehaze", "Underwater", "Stage")
+    val filters = listOf(
+        "Normal", "Beauty", "Dehaze", "Underwater", "Stage", 
+        "Gray", "Histogram", "Binary", "Morph Open", "Morph Close", "Blur"
+    )
 }

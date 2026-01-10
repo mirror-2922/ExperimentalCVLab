@@ -1,222 +1,191 @@
 package com.mirror2922.ecvl.ui.camera
 
-import android.graphics.Bitmap
-import android.util.Size
+import android.graphics.RectF
+import android.os.Handler
+import android.util.Log
+import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.compose.foundation.Image
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.mirror2922.ecvl.NativeLib
+import com.mirror2922.ecvl.util.HardwareMonitor
 import com.mirror2922.ecvl.viewmodel.AppMode
 import com.mirror2922.ecvl.viewmodel.BeautyViewModel
-import com.mirror2922.ecvl.viewmodel.FaceResult
-import com.mirror2922.ecvl.viewmodel.YoloResultData
+import com.mirror2922.ecvl.viewmodel.Detection
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
-import org.json.JSONArray
-import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.Mat
-import org.opencv.imgproc.Imgproc
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.util.concurrent.Executors
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import kotlin.random.Random
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
 fun CameraView(viewModel: BeautyViewModel) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val nativeLib = remember { NativeLib() }
+    var viewfinderSurface by remember { mutableStateOf<Surface?>(null) }
+    
+    // 1. HUD Data Polling
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            try {
+                val perf = nativeLib.getPerfMetricsBinary()
+                if (perf.size >= 4) {
+                    viewModel.currentFps = perf[0]
+                    viewModel.inferenceTime = perf[1].toLong()
+                    viewModel.actualCameraSize = "${perf[2].toInt()}x${perf[3].toInt()}"
+                }
+                viewModel.cpuUsage = HardwareMonitor.getCpuUsage()
+            } catch (e: Exception) { }
+            delay(33)
+        }
+    }
+
+    // 2. Clear state on mode switch
+    LaunchedEffect(viewModel.currentMode) {
+        viewModel.detections.clear()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (viewModel.currentMode == AppMode.FACE) {
+            CameraXFaceDetector(viewModel)
+        } else {
+            // NDK Camera View
+            AndroidView(
+                factory = { ctx ->
+                    SurfaceView(ctx).apply {
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(h: SurfaceHolder) { viewfinderSurface = h.surface }
+                            override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, h1: Int) { viewfinderSurface = h.surface }
+                            override fun surfaceDestroyed(h: SurfaceHolder) { 
+                                viewfinderSurface = null 
+                                nativeLib.stopNativeCamera()
+                            }
+                        })
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            DisposableEffect(viewModel.lensFacing, viewfinderSurface) {
+                val vs = viewfinderSurface
+                if (vs != null) {
+                    nativeLib.startNativeCamera(if (viewModel.lensFacing == 1) 1 else 0, vs)
+                    nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else 0, viewModel.selectedFilter)
+                }
+                onDispose { nativeLib.stopNativeCamera() }
+            }
+
+            LaunchedEffect(viewModel.currentMode, viewModel.selectedFilter) {
+                nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else 0, viewModel.selectedFilter)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CameraXFaceDetector(viewModel: BeautyViewModel) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val executor = remember { Executors.newSingleThreadExecutor() }
+    val isProcessing = remember { AtomicBoolean(false) } 
     
     val faceDetector = remember {
-        val options = FaceDetectorOptions.Builder()
+        FaceDetection.getClient(FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .build()
-        FaceDetection.getClient(options)
+            .build())
     }
 
-    var bitmapState by remember { mutableStateOf<Bitmap?>(null) }
-    var lastFrameTime by remember { mutableStateOf(System.currentTimeMillis()) }
-    val rgbaMat = remember { Mat() }
-    val captureMat = remember { Mat() }
-    val previewMat = remember { Mat() }
-    val aiMat = remember { Mat() }
-    var outputBitmap by remember { mutableStateOf<Bitmap?>(null) }
-
-    val targetCaptureSize = remember(viewModel.cameraResolution, viewModel.backendResolutionScaling, viewModel.targetBackendWidth) {
-        val prefParts = viewModel.cameraResolution.split("x")
-        val prefW = prefParts[0].toInt()
-        val prefH = prefParts[1].toInt()
-        
-        if (viewModel.backendResolutionScaling) {
-            val targetW = maxOf(prefW, viewModel.targetBackendWidth)
-            val aspect = prefH.toFloat() / prefW.toFloat()
-            Size(targetW, (targetW * aspect).toInt())
-        } else Size(prefW, prefH)
-    }
-
-    DisposableEffect(lifecycleOwner, viewModel.lensFacing, targetCaptureSize) {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-        val listener = Runnable {
-            val cameraProvider = cameraProviderFuture.get()
-            val selector = CameraSelector.Builder().requireLensFacing(viewModel.lensFacing).build()
-            
-            if (!cameraProvider.hasCamera(selector)) return@Runnable
-            cameraProvider.unbindAll()
-
-            val resSelector = ResolutionSelector.Builder()
-                .setResolutionStrategy(ResolutionStrategy(targetCaptureSize, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
-                .build()
-
-            val imageAnalysis = ImageAnalysis.Builder()
-                .setResolutionSelector(resSelector)
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build()
-
-            imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                try {
-                    val startTime = System.currentTimeMillis()
-                    nativeLib.yuvToRgba(
-                        imageProxy.planes[0].buffer, imageProxy.planes[0].rowStride,
-                        imageProxy.planes[1].buffer, imageProxy.planes[1].rowStride,
-                        imageProxy.planes[2].buffer, imageProxy.planes[2].rowStride,
-                        imageProxy.planes[1].pixelStride,
-                        imageProxy.width, imageProxy.height, rgbaMat.nativeObjAddr
-                    )
-                    
-                    val rotation = imageProxy.imageInfo.rotationDegrees
-                    when (rotation) {
-                        90 -> Core.rotate(rgbaMat, captureMat, Core.ROTATE_90_CLOCKWISE)
-                        180 -> Core.rotate(rgbaMat, captureMat, Core.ROTATE_180)
-                        270 -> Core.rotate(rgbaMat, captureMat, Core.ROTATE_90_COUNTERCLOCKWISE)
-                        else -> rgbaMat.copyTo(captureMat)
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                val previewView = PreviewView(ctx)
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                cameraProviderFuture.addListener({
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
                     }
-                    if (viewModel.lensFacing == CameraSelector.LENS_FACING_FRONT) Core.flip(captureMat, captureMat, 1)
-                    
-                    val prefParts = viewModel.cameraResolution.split("x")
-                    val prefW = prefParts[0].toInt()
-                    val captureRatio = captureMat.rows().toDouble() / captureMat.cols().toDouble()
-                    val targetH = (prefW * captureRatio).toInt()
-                    
-                    if (captureMat.cols() != prefW || captureMat.rows() != targetH) {
-                        Imgproc.resize(captureMat, previewMat, org.opencv.core.Size(prefW.toDouble(), targetH.toDouble()))
-                    } else {
-                        captureMat.copyTo(previewMat)
-                    }
-                    
-                    viewModel.actualCameraSize = "${previewMat.cols()}x${previewMat.rows()}"
+                    val selector = CameraSelector.Builder()
+                        .requireLensFacing(if (viewModel.lensFacing == 1) CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT)
+                        .build()
+                    val imageAnalysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
 
-                    if (viewModel.currentMode == AppMode.AI) {
-                        if (viewModel.backendResolutionScaling) {
-                            val scale = viewModel.targetBackendWidth.toFloat() / captureMat.cols()
-                            val aiH = (captureMat.rows() * scale).toInt()
-                            Imgproc.resize(captureMat, aiMat, org.opencv.core.Size(viewModel.targetBackendWidth.toDouble(), aiH.toDouble()))
-                        } else { previewMat.copyTo(aiMat) }
-                        
-                        viewModel.actualBackendSize = "${aiMat.cols()}x${aiMat.rows()}"
-                        val activeIds = viewModel.selectedYoloClasses.map { viewModel.allCOCOClasses.indexOf(it) }.filter { it >= 0 }.toIntArray()
-                        val jsonResult = nativeLib.yoloInference(aiMat.nativeObjAddr, viewModel.yoloConfidence, viewModel.yoloIoU, activeIds)
-                        
-                        val results = mutableListOf<YoloResultData>()
-                        val jsonArray = JSONArray(jsonResult)
-                        for (i in 0 until jsonArray.length()) {
-                            val obj = jsonArray.getJSONObject(i)
-                            val boxArr = obj.getJSONArray("box")
-                            results.add(YoloResultData(obj.getString("label"), obj.getDouble("conf").toFloat(), listOf(boxArr.getInt(0), boxArr.getInt(1), boxArr.getInt(2), boxArr.getInt(3))))
-                        }
-                        viewModel.detectedYoloObjects.clear()
-                        viewModel.detectedYoloObjects.addAll(results)
-                    } else if (viewModel.currentMode == AppMode.FACE) {
-                        // ML Kit coordinates are relative to the input image (unrotated)
-                        // But we tell ML Kit the rotation, so it returns coordinates corrected for that rotation.
-                        // We store the coordinate space ML Kit is operating in.
-                        val isRotated = rotation == 90 || rotation == 270
-                        val detectorW = if (isRotated) imageProxy.height else imageProxy.width
-                        val detectorH = if (isRotated) imageProxy.width else imageProxy.height
-                        viewModel.actualBackendSize = "${detectorW}x${detectorH}"
-
+                    imageAnalysis.setAnalyzer(executor) { imageProxy ->
+                        if (isProcessing.get()) { imageProxy.close(); return@setAnalyzer }
                         val mediaImage = imageProxy.image
                         if (mediaImage != null) {
+                            isProcessing.set(true)
+                            val rotation = imageProxy.imageInfo.rotationDegrees
                             val inputImage = InputImage.fromMediaImage(mediaImage, rotation)
-                            val latch = CountDownLatch(1)
+                            
+                            val isRotated = rotation == 90 || rotation == 270
+                            val w = if (isRotated) imageProxy.height.toFloat() else imageProxy.width.toFloat()
+                            val h = if (isRotated) imageProxy.width.toFloat() else imageProxy.height.toFloat()
+                            
                             faceDetector.process(inputImage)
                                 .addOnSuccessListener { faces ->
-                                    viewModel.detectedFaces.clear()
-                                    faces.forEach { viewModel.detectedFaces.add(FaceResult(it.boundingBox, it.trackingId)) }
+                                    val newDetections = faces.map { face ->
+                                        Detection(
+                                            label = "Face",
+                                            confidence = 1.0f,
+                                            boundingBox = RectF(
+                                                face.boundingBox.left / w,
+                                                face.boundingBox.top / h,
+                                                face.boundingBox.right / w,
+                                                face.boundingBox.bottom / h
+                                            ),
+                                            id = face.trackingId
+                                        )
+                                    }
+                                    viewModel.detections.clear()
+                                    viewModel.detections.addAll(newDetections)
                                 }
-                                .addOnCompleteListener { latch.countDown() }
-                            
-                            // Prevent SIGSEGV by waiting for detector to finish before closing imageProxy
-                            latch.await(500, TimeUnit.MILLISECONDS)
-                        }
-                    } else {
-                        if (viewModel.selectedFilter != "Normal") {
-                            when (viewModel.selectedFilter) {
-                                "Beauty" -> nativeLib.applyBeautyFilter(previewMat.nativeObjAddr)
-                                "Dehaze" -> nativeLib.applyDehaze(previewMat.nativeObjAddr)
-                                "Underwater" -> nativeLib.applyUnderwater(previewMat.nativeObjAddr)
-                                "Stage" -> nativeLib.applyStage(previewMat.nativeObjAddr)
-                            }
-                        }
-                        viewModel.actualBackendSize = viewModel.actualCameraSize
+                                .addOnCompleteListener { 
+                                    imageProxy.close() 
+                                    isProcessing.set(false)
+                                }
+                        } else imageProxy.close()
                     }
 
-                    // --- BITMAP RENDER SAFE CHECK ---
-                    if (previewMat.cols() > 0 && previewMat.rows() > 0) {
-                        if (outputBitmap == null || outputBitmap!!.width != previewMat.cols() || outputBitmap!!.height != previewMat.rows()) {
-                            outputBitmap = Bitmap.createBitmap(previewMat.cols(), previewMat.rows(), Bitmap.Config.ARGB_8888)
-                        }
-                        Utils.matToBitmap(previewMat, outputBitmap)
-                        
-                        val endTime = System.currentTimeMillis()
-                        val duration = endTime - lastFrameTime
-                        lastFrameTime = endTime
-                        viewModel.inferenceTime = endTime - startTime
-                        if (duration > 0) viewModel.currentFps = 0.9f * viewModel.currentFps + 0.1f * (1000f / duration)
-                        bitmapState = outputBitmap
-                    }
-                } catch (e: Exception) { 
-                    e.printStackTrace() 
-                } finally { 
-                    imageProxy.close() 
-                }
+                    try {
+                        cameraProvider.unbindAll()
+                        cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview, imageAnalysis)
+                    } catch (e: Exception) { }
+                }, androidx.core.content.ContextCompat.getMainExecutor(ctx))
+                previewView
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            viewModel.detections.forEach { detection ->
+                val rect = detection.boundingBox
+                drawRect(
+                    color = Color.Yellow,
+                    topLeft = androidx.compose.ui.geometry.Offset(rect.left * size.width, rect.top * size.height),
+                    size = androidx.compose.ui.geometry.Size(rect.width() * size.width, rect.height() * size.height),
+                    style = Stroke(width = 2.dp.toPx())
+                )
             }
-            try { cameraProvider.bindToLifecycle(lifecycleOwner, selector, imageAnalysis) } catch (e: Exception) { e.printStackTrace() }
         }
-        cameraProviderFuture.addListener(listener, ContextCompat.getMainExecutor(context))
-        onDispose { cameraProviderFuture.get().unbindAll() }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            executor.shutdown()
-            rgbaMat.release()
-            captureMat.release()
-            previewMat.release()
-            aiMat.release()
-            faceDetector.close()
-        }
-    }
-
-    if (bitmapState != null) {
-        Image(bitmap = bitmapState!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-    } else {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
     }
 }

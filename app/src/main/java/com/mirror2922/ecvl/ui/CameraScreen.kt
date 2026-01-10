@@ -24,9 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.mirror2922.ecvl.NativeLib
-import com.mirror2922.ecvl.ui.camera.CameraOverlay
 import com.mirror2922.ecvl.ui.camera.CameraView
-import com.mirror2922.ecvl.ui.components.AppHud
+import com.mirror2922.ecvl.ui.components.CompactHud
 import com.mirror2922.ecvl.ui.components.FilterPanel
 import com.mirror2922.ecvl.viewmodel.AppMode
 import com.mirror2922.ecvl.viewmodel.BeautyViewModel
@@ -131,8 +130,7 @@ fun CameraScreen(navController: NavController, viewModel: BeautyViewModel) {
         if (hasPermission) {
             Box(Modifier.padding(padding).fillMaxSize().onGloballyPositioned { containerSize = it.size }) {
                 CameraView(viewModel)
-                CameraOverlay(viewModel, containerSize)
-                AppHud(viewModel, Modifier.align(Alignment.TopStart))
+                CompactHud(viewModel)
                 
                 // --- Larger Effect Button (FAB) ---
                 if (viewModel.currentMode == AppMode.Camera) {
