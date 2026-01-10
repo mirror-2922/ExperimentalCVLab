@@ -22,7 +22,6 @@ import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
     val scrollState = rememberScrollState()
-    var showBackendWidthDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -59,17 +58,6 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            SectionTitle("Camera Hardware")
-            
-            SettingItem(
-                title = "Capture Resolution",
-                subtitle = "Selected: ${viewModel.cameraResolution} (Actual: ${viewModel.actualCameraSize})",
-                icon = Icons.Default.ChevronRight,
-                onClick = { viewModel.showResolutionDialog = true }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
             SectionTitle("AI Inference")
             SettingItem(
                 title = "Model Management",
@@ -77,20 +65,6 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 icon = Icons.Default.ChevronRight,
                 onClick = { navController.navigate("model_management") }
             )
-
-            SettingSwitch("Independent Inference Resolution", viewModel.useIndependentAiResolution) { 
-                viewModel.useIndependentAiResolution = it 
-                viewModel.saveSettings()
-            }
-
-            if (viewModel.useIndependentAiResolution) {
-                SettingItem(
-                    title = "Target Inference Width",
-                    subtitle = "Selected: ${viewModel.independentAiWidth}px",
-                    icon = Icons.Default.ChevronRight,
-                    onClick = { showBackendWidthDialog = true }
-                )
-            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
@@ -104,36 +78,9 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             BackendSelector(viewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("Experimental CV Lab v1.9.4 | Core Pipeline Overhaul", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("Experimental CV Lab v2.0.0 | Full NDK Integration", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
     }
-
-    SelectionDialog(
-        show = viewModel.showResolutionDialog,
-        onDismiss = { viewModel.showResolutionDialog = false },
-        title = "Select Capture Resolution",
-        items = viewModel.availableResolutions,
-        selectedItem = viewModel.cameraResolution,
-        onItemSelected = { 
-            viewModel.cameraResolution = it
-            viewModel.saveSettings()
-        },
-        itemLabel = { it }
-    )
-
-    SelectionDialog(
-        show = showBackendWidthDialog,
-        onDismiss = { showBackendWidthDialog = false },
-        title = "Select Inference Width",
-        items = viewModel.getAvailableInferenceWidths(),
-        selectedItem = viewModel.independentAiWidth,
-        onItemSelected = { 
-            viewModel.independentAiWidth = it
-            viewModel.independentAiHeight = it // Keep it square for YOLO
-            viewModel.saveSettings() 
-        },
-        itemLabel = { "${it}px" }
-    )
 }
 
 @Composable

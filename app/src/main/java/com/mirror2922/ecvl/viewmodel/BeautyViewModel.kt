@@ -44,18 +44,6 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var isDarkTheme by mutableStateOf(prefs.getBoolean("dark_theme", false))
     var useDynamicColor by mutableStateOf(prefs.getBoolean("dynamic_color", true))
     
-    // Resolution
-    var cameraResolution by mutableStateOf(prefs.getString("camera_res", "1280x720") ?: "1280x720")
-    
-    // Independent AI Resolution (Refactored)
-    var useIndependentAiResolution by mutableStateOf(prefs.getBoolean("use_independent_ai_res", false))
-    var independentAiWidth by mutableStateOf(prefs.getInt("independent_ai_width", 640))
-    var independentAiHeight by mutableStateOf(prefs.getInt("independent_ai_height", 640))
-    
-    val standardInferenceWidths = listOf(320, 480, 640, 720, 800, 960, 1024, 1280)
-    
-    fun getAvailableInferenceWidths(): List<Int> = standardInferenceWidths
-
     // Performance Info
     var showDebugInfo by mutableStateOf(prefs.getBoolean("show_debug_info", true))
     var currentFps by mutableStateOf(0f)
@@ -80,12 +68,8 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var lensFacing by mutableStateOf(prefs.getInt("lens_facing", androidx.camera.core.CameraSelector.LENS_FACING_BACK))
     var isLoading by mutableStateOf(false)
 
-    // Unified Results
+    // Unified Results (Mainly for Face mode now as AI is composited in NDK)
     val detections = mutableStateListOf<Detection>()
-
-    // ML Kit Results (Legacy compatibility)
-    val detectedFaces = mutableStateListOf<FaceResult>()
-    val detectedYoloObjects = mutableStateListOf<YoloResultData>()
 
     // YOLO Config
     var yoloConfidence by mutableStateOf(prefs.getFloat("yolo_conf", 0.5f))
@@ -140,14 +124,10 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
             putBoolean("dark_theme", isDarkTheme)
             putBoolean("dynamic_color", useDynamicColor)
             putBoolean("show_debug_info", showDebugInfo)
-            putString("camera_res", cameraResolution)
-            putBoolean("use_independent_ai_res", useIndependentAiResolution)
-            putInt("independent_ai_width", independentAiWidth)
-            putInt("independent_ai_height", independentAiHeight)
             putString("hardware_backend", hardwareBackend)
             putString("inference_engine", inferenceEngine)
             putFloat("yolo_conf", yoloConfidence)
-            putFloat("yolo_iou", yoloIoU)
+            putFloat("yfloat_iou", yoloIoU)
             putString("current_model_id", currentModelId)
             putInt("lens_facing", lensFacing)
             apply()
@@ -159,11 +139,6 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
         else selectedYoloClasses.add(className)
     }
     
-    fun getCameraSize(): Size {
-        val parts = cameraResolution.split("x")
-        return Size(parts[0].toInt(), parts[1].toInt())
-    }
-
     val availableResolutions = mutableStateListOf<String>()
     val filters = listOf(
         "Normal", "Beauty", "Dehaze", "Underwater", "Stage", 

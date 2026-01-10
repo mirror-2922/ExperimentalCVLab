@@ -41,6 +41,14 @@ bool initYolo(const char* modelPath) {
     return success;
 }
 
+void releaseDetector() {
+    lock_guard<mutex> lock(detectorMutex);
+    if (detector) {
+        detector.reset();
+        __android_log_print(ANDROID_LOG_INFO, "InferenceEngine", "Inference engine released");
+    }
+}
+
 void switchEngine(const string& engineName) {
     lock_guard<mutex> lock(detectorMutex);
     if (lastEngine == engineName && detector) return;
@@ -135,6 +143,11 @@ int getPerfMetricsBinary(float* outData) {
 void updateNativeConfig(int mode, const string& filter) {
     currentMode = mode;
     currentFilter = filter;
+    
+    // Release engine if in Camera mode to save resources
+    if (mode == 0) { // AppMode.Camera
+        releaseDetector();
+    }
 }
 
 int getNativeMode() { return currentMode; }

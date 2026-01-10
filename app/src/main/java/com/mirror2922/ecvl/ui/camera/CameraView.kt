@@ -8,10 +8,14 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mirror2922.ecvl.NativeLib
 import com.mirror2922.ecvl.util.HardwareMonitor
@@ -23,14 +27,15 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import java.nio.ByteOrder
-import java.util.concurrent.Executors
+import java.io.File
 
 @Composable
 fun CameraView(viewModel: BeautyViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val nativeLib = remember { NativeLib() }
     var viewfinderSurface by remember { mutableStateOf<Surface?>(null) }
     
+    // Face Detection Setup
     val faceDetector = remember {
         val options = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -42,11 +47,24 @@ fun CameraView(viewModel: BeautyViewModel) {
         ImageReader.newInstance(640, 640, ImageFormat.YUV_420_888, 2)
     }
 
-    // 1. Reliable Data Polling via ByteBuffer
+    // 1. Model Auto-loading for AI Mode
+    LaunchedEffect(viewModel.currentMode, viewModel.currentModelId) {
+        if (viewModel.currentMode == AppMode.AI && viewModel.currentModelId.isNotEmpty()) {
+            val modelFile = File(context.filesDir, "${viewModel.currentModelId}.onnx")
+            if (modelFile.exists()) {
+                viewModel.isLoading = true
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    nativeLib.initYolo(modelFile.absolutePath)
+                }
+                viewModel.isLoading = false
+            }
+        }
+    }
+
+    // 2. Pure Kotlin Performance Polling
     LaunchedEffect(Unit) {
         while (isActive) {
             try {
-                // Performance Metrics
                 val perf = nativeLib.getPerfMetricsBinary()
                 if (perf.size >= 4) {
                     viewModel.currentFps = perf[0]
@@ -54,50 +72,15 @@ fun CameraView(viewModel: BeautyViewModel) {
                     viewModel.actualCameraSize = "${perf[2].toInt()}x${perf[3].toInt()}"
                     viewModel.actualBackendSize = if (viewModel.currentMode == AppMode.AI) "640x640" else viewModel.actualCameraSize
                 }
-                
                 viewModel.cpuUsage = HardwareMonitor.getCpuUsage()
-                
-                // Detection Results via zero-copy ByteBuffer
-                if (viewModel.currentMode == AppMode.AI) {
-                    val buffer = nativeLib.getNativeDetectionsBuffer()
-                    if (buffer != null) {
-                        buffer.order(ByteOrder.nativeOrder())
-                        val objCount = buffer.getFloat().toInt()
-                        
-                        if (objCount in 1..50) { // Sanity check
-                            val detections = mutableListOf<Detection>()
-                            for (i in 0 until objCount) {
-                                val classIdx = buffer.getFloat().toInt()
-                                val confidence = buffer.getFloat()
-                                val x = buffer.getFloat()
-                                val y = buffer.getFloat()
-                                val w = buffer.getFloat()
-                                val h = buffer.getFloat()
-                                
-                                val label = viewModel.allCOCOClasses.getOrNull(classIdx) ?: "ID:$classIdx"
-                                val detection = Detection(
-                                    label = label,
-                                    confidence = confidence,
-                                    boundingBox = RectF(x, y, x + w, y + h)
-                                )
-                                detections.add(detection)
-                                if (i == 0) Log.d("CameraView", "YOLO: $label [${"%.2f".format(confidence)}] at $x, $y")
-                            }
-                            viewModel.detections.clear()
-                            viewModel.detections.addAll(detections)
-                        } else if (objCount == 0) {
-                            viewModel.detections.clear()
-                        }
-                    }
-                }
             } catch (e: Exception) {
-                Log.e("CameraView", "Polling error", e)
+                Log.e("CameraView", "HUD Polling error", e)
             }
-            delay(16)
+            delay(33) // ~30Hz is enough for HUD
         }
     }
 
-    // 2. ML Kit (unchanged logic, just ensuring listener is clean)
+    // 3. ML Kit Face Detection (Kotlin Composite)
     DisposableEffect(mlKitReader) {
         val listener = ImageReader.OnImageAvailableListener { reader ->
             val image = try { reader.acquireLatestImage() } catch (e: Exception) { null } ?: return@OnImageAvailableListener
@@ -128,35 +111,76 @@ fun CameraView(viewModel: BeautyViewModel) {
         onDispose { mlKitReader.setOnImageAvailableListener(null, null) }
     }
 
-    // 3. Lifecycle
-    DisposableEffect(viewModel.lensFacing, viewModel.cameraResolution, viewfinderSurface) {
+    // 4. NDK Camera Lifecycle
+    DisposableEffect(viewModel.lensFacing, viewfinderSurface) {
         val vs = viewfinderSurface
         if (vs != null) {
-            val resParts = viewModel.cameraResolution.split("x")
-            nativeLib.startNativeCamera(if (viewModel.lensFacing == 1) 1 else 0, resParts[0].toInt(), resParts[1].toInt(), vs, mlKitReader.surface)
-            nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0, viewModel.selectedFilter)
+            // Constant 1280x720 internal processing for stability
+            nativeLib.startNativeCamera(if (viewModel.lensFacing == 1) 1 else 0, 1280, 720, vs, mlKitReader.surface)
+            nativeLib.updateNativeConfig(
+                when(viewModel.currentMode) {
+                    AppMode.AI -> 1
+                    AppMode.FACE -> 2
+                    else -> 0
+                },
+                viewModel.selectedFilter
+            )
         }
         onDispose { nativeLib.stopNativeCamera() }
     }
 
+    // 5. Dynamic State Sync
     LaunchedEffect(viewModel.currentMode, viewModel.selectedFilter) {
-        nativeLib.updateNativeConfig(if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0, viewModel.selectedFilter)
-        if (viewModel.currentMode == AppMode.Camera) viewModel.detections.clear()
+        nativeLib.updateNativeConfig(
+            when(viewModel.currentMode) {
+                AppMode.AI -> 1
+                AppMode.FACE -> 2
+                else -> 0
+            },
+            viewModel.selectedFilter
+        )
+        if (viewModel.currentMode != AppMode.FACE) {
+            viewModel.detections.clear()
+        }
     }
 
-    AndroidView(
-        factory = { ctx ->
-            SurfaceView(ctx).apply {
-                holder.addCallback(object : SurfaceHolder.Callback {
-                    override fun surfaceCreated(h: SurfaceHolder) { viewfinderSurface = h.surface }
-                    override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, h1: Int) { viewfinderSurface = h.surface }
-                    override fun surfaceDestroyed(h: SurfaceHolder) { 
-                        viewfinderSurface = null 
-                        nativeLib.stopNativeCamera()
-                    }
-                })
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Native Rendering (Viewfinder + NDK Composited AI)
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    holder.addCallback(object : SurfaceHolder.Callback {
+                        override fun surfaceCreated(h: SurfaceHolder) { viewfinderSurface = h.surface }
+                        override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, h1: Int) { viewfinderSurface = h.surface }
+                        override fun surfaceDestroyed(h: SurfaceHolder) { 
+                            viewfinderSurface = null 
+                            nativeLib.stopNativeCamera()
+                        }
+                    })
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Kotlin Overlay (ONLY for Face Mode)
+        if (viewModel.currentMode == AppMode.FACE) {
+            FaceOverlay(viewModel)
+        }
+    }
+}
+
+@Composable
+private fun FaceOverlay(viewModel: BeautyViewModel) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        // ML Kit results are already normalized in the LaunchedEffect above
+        viewModel.detections.forEach { detection ->
+            val rect = detection.boundingBox
+            drawRect(
+                color = Color.Yellow,
+                topLeft = androidx.compose.ui.geometry.Offset(rect.left * size.width, rect.top * size.height),
+                size = androidx.compose.ui.geometry.Size(rect.width() * size.width, rect.height() * size.height),
+                style = Stroke(width = 2.dp.toPx())
+            )
+        }
+    }
 }

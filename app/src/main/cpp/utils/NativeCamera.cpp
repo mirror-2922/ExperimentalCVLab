@@ -41,15 +41,9 @@ cv::Mat aImgToMat(AImage* image) {
 
 NativeCamera::NativeCamera() {
     camera_manager = ACameraManager_create();
-    device_callbacks.context = this;
-    device_callbacks.onDisconnected = onDeviceDisconnected;
-    device_callbacks.onError = onDeviceError;
-    session_callbacks.context = this;
-    session_callbacks.onClosed = onSessionClosed;
-    session_callbacks.onReady = onSessionReady;
-    session_callbacks.onActive = onSessionActive;
-    reader_listener.context = this;
-    reader_listener.onImageAvailable = onImageAvailable;
+    device_callbacks = {this, onDeviceDisconnected, onDeviceError};
+    session_callbacks = {this, onSessionClosed, onSessionReady, onSessionActive};
+    reader_listener = {this, onImageAvailable};
 }
 
 NativeCamera::~NativeCamera() {
@@ -92,7 +86,6 @@ bool NativeCamera::open(int facing, int width, int height, jobject vSurface, job
         std::lock_guard<std::mutex> lock(window_mutex);
         viewfinder_window = ANativeWindow_fromSurface(getJNIEnv(), vSurface);
         if (mSurface) mlkit_window = ANativeWindow_fromSurface(getJNIEnv(), mSurface);
-        // Important: Geometry must be set to correctly handle the window buffer
         if (viewfinder_window) ANativeWindow_setBuffersGeometry(viewfinder_window, 0, 0, WINDOW_FORMAT_RGBA_8888);
         if (mlkit_window) ANativeWindow_setBuffersGeometry(mlkit_window, 0, 0, WINDOW_FORMAT_RGBA_8888);
     }
@@ -153,6 +146,7 @@ void NativeCamera::onImageAvailable(void* context, AImageReader* reader) {
     AImage_delete(image);
     if (rgba.empty()) return;
 
+    // 1. Preprocessing (Rotate then Resize-then-Crop)
     cv::Mat rotated;
     switch (self->sensor_orientation) {
         case 90: cv::rotate(rgba, rotated, cv::ROTATE_90_CLOCKWISE); break;
@@ -162,37 +156,38 @@ void NativeCamera::onImageAvailable(void* context, AImageReader* reader) {
     }
     if (self->camera_facing == 0) cv::flip(rotated, rotated, 1);
 
-    // 1:1 Square Crop
-    int side = std::min(rotated.cols, rotated.rows);
-    cv::Rect roi((rotated.cols - side) / 2, (rotated.rows - side) / 2, side, side);
-    cv::Mat cropped = rotated(roi).clone();
+    double scale = 640.0 / std::min(rotated.cols, rotated.rows);
+    cv::Mat scaled;
+    cv::resize(rotated, scaled, cv::Size(), scale, scale);
+    int cx = (scaled.cols - 640) / 2;
+    int cy = (scaled.rows - 640) / 2;
+    cv::Mat cropped = scaled(cv::Rect(cx, cy, 640, 640)).clone();
 
     float latency = 0;
-    if (getNativeMode() == 1 && detector) {
+    int mode = getNativeMode();
+
+    // 2. AI Mode: Composite BBoxes in NDK
+    if (mode == 1 && detector) {
         auto start = std::chrono::steady_clock::now();
-        cv::Mat aiInput;
-        cv::resize(cropped, aiInput, cv::Size(640, 640));
-        auto results = detector->detect(aiInput, getNativeConf(), getNativeIoU(), getNativeClasses());
+        auto results = detector->detect(cropped, getNativeConf(), getNativeIoU(), getNativeClasses());
         
-        // Debug Log
-        if (!results.empty()) {
-            __android_log_print(ANDROID_LOG_DEBUG, TAG, "Detected %zu objects", results.size());
+        // Composite directly on 'cropped' Mat
+        for (const auto& res : results) {
+            cv::Rect rect(res.x, res.y, res.width, res.height);
+            cv::rectangle(cropped, rect, cv::Scalar(0, 255, 0, 255), 2);
+            
+            std::string label = res.label + " " + std::to_string((int)(res.confidence * 100)) + "%";
+            int baseLine;
+            cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+            cv::rectangle(cropped, cv::Rect(res.x, res.y - labelSize.height, labelSize.width, labelSize.height + baseLine), cv::Scalar(0, 255, 0, 255), -1);
+            cv::putText(cropped, label, cv::Point(res.x, res.y), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255, 255), 1);
         }
 
-        for (auto& res : results) {
-            // Normalize relative to 640x640 AI input
-            res.x /= (float)aiInput.cols;
-            res.y /= (float)aiInput.rows;
-            res.width /= (float)aiInput.cols;
-            res.height /= (float)aiInput.rows;
-            __android_log_print(ANDROID_LOG_DEBUG, TAG, "BBox: label=%s, idx=%d, conf=%.2f, x=%.3f, y=%.2f, w=%.2f, h=%.2f", 
-                res.label.c_str(), res.class_index, res.confidence, (float)res.x, (float)res.y, (float)res.width, (float)res.height);
-        }
-        updateDetectionsBinary(results);
         auto end = std::chrono::steady_clock::now();
         latency = (float)std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     }
 
+    // 3. Apply Filters (Available in all modes)
     std::string filter = getNativeFilter();
     if (filter != "Normal") {
         if (filter == "Beauty") applyBeauty(cropped);
@@ -207,33 +202,26 @@ void NativeCamera::onImageAvailable(void* context, AImageReader* reader) {
         else if (filter == "Blur") applyBlur(cropped);
     }
 
-    // Render with Letterboxing to avoid stretch
+    // 4. Rendering
     {
         std::lock_guard<std::mutex> lock(self->window_mutex);
         if (self->viewfinder_window && self->is_running) {
             ANativeWindow_Buffer buf;
             if (ANativeWindow_lock(self->viewfinder_window, &buf, nullptr) == 0) {
                 if (buf.width > 0 && buf.height > 0 && buf.bits != nullptr) {
-                    // Create a Mat wrapping the Surface buffer
                     cv::Mat dst(buf.height, buf.width, CV_8UC4, buf.bits, buf.stride * 4);
-                    dst.setTo(cv::Scalar(0, 0, 0, 255)); // Clear background
-
-                    // Calculate centered aspect-fit ROI
-                    double scale = std::min((double)buf.width / cropped.cols, (double)buf.height / cropped.rows);
-                    int nw = (int)(cropped.cols * scale);
-                    int nh = (int)(cropped.rows * scale);
-                    int nx = (buf.width - nw) / 2;
-                    int ny = (buf.height - nh) / 2;
-
-                    cv::Rect renderRoi(nx, ny, nw, nh);
-                    cv::Mat renderDst = dst(renderRoi);
+                    dst.setTo(cv::Scalar(0, 0, 0, 255));
+                    double rScale = std::min((double)buf.width / cropped.cols, (double)buf.height / cropped.rows);
+                    int nw = (int)(cropped.cols * rScale);
+                    int nh = (int)(cropped.rows * rScale);
+                    cv::Mat renderDst = dst(cv::Rect((buf.width - nw) / 2, (buf.height - nh) / 2, nw, nh));
                     cv::resize(cropped, renderDst, renderDst.size());
                 }
                 ANativeWindow_unlockAndPost(self->viewfinder_window);
             }
         }
-        // ML Kit window (raw for detection)
-        if (self->mlkit_window && self->is_running && getNativeMode() == 2) {
+        // ML Kit stream (Raw, no NDK composites)
+        if (self->mlkit_window && self->is_running && mode == 2) {
             ANativeWindow_Buffer buf;
             if (ANativeWindow_lock(self->mlkit_window, &buf, nullptr) == 0) {
                 cv::Mat dst(buf.height, buf.width, CV_8UC4, buf.bits, buf.stride * 4);
@@ -243,6 +231,7 @@ void NativeCamera::onImageAvailable(void* context, AImageReader* reader) {
         }
     }
 
+    // 5. Update Metrics
     self->frame_count++;
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - self->last_fps_time).count();
@@ -251,7 +240,7 @@ void NativeCamera::onImageAvailable(void* context, AImageReader* reader) {
         self->frame_count = 0;
         self->last_fps_time = now;
     }
-    updatePerfMetrics(self->current_fps, latency, side, side);
+    updatePerfMetrics(self->current_fps, latency, 640, 640);
 }
 
 void NativeCamera::onDeviceDisconnected(void* context, ACameraDevice* device) {}

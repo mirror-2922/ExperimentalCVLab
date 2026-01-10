@@ -20,8 +20,8 @@ android {
         applicationId = "com.mirror2922.ecvl"
         minSdk = 26
         targetSdk = 35
-        versionCode = 194
-        versionName = "1.9.4"
+        versionCode = 200
+        versionName = "2.0.0"
         ndkVersion = "28.2.13676358"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

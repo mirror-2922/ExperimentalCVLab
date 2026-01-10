@@ -9,6 +9,7 @@
 extern std::unique_ptr<InferenceEngine> detector;
 
 bool initYolo(const char* modelPath);
+void releaseDetector();
 void switchEngine(const std::string& engineName);
 void setBackend(const std::string& backendName);
 bool isNpuAvailable();
