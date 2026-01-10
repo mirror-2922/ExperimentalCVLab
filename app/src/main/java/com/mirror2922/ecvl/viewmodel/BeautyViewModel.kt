@@ -57,7 +57,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     fun getAvailableInferenceWidths(): List<Int> = standardInferenceWidths
 
     // Performance Info
-    var showDebugInfo by mutableStateOf(true)
+    var showDebugInfo by mutableStateOf(prefs.getBoolean("show_debug_info", true))
     var currentFps by mutableStateOf(0f)
     var inferenceTime by mutableStateOf(0L)
     var hardwareBackend by mutableStateOf(prefs.getString("hardware_backend", "CPU") ?: "CPU")
@@ -139,6 +139,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
         prefs.edit().apply {
             putBoolean("dark_theme", isDarkTheme)
             putBoolean("dynamic_color", useDynamicColor)
+            putBoolean("show_debug_info", showDebugInfo)
             putString("camera_res", cameraResolution)
             putBoolean("use_independent_ai_res", useIndependentAiResolution)
             putInt("independent_ai_width", independentAiWidth)

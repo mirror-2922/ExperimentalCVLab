@@ -52,6 +52,10 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 viewModel.useDynamicColor = it 
                 viewModel.saveSettings()
             }
+            SettingSwitch("Show Performance HUD", viewModel.showDebugInfo) {
+                viewModel.showDebugInfo = it
+                viewModel.saveSettings()
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 

@@ -62,8 +62,8 @@ Java_com_mirror2922_ecvl_NativeLib_yoloInference(JNIEnv *env, jobject, jlong mat
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_mirror2922_ecvl_NativeLib_startNativeCamera(JNIEnv *env, jobject, jint facing, jint width, jint height, jobject viewfinderSurface) {
-    return startNativeCamera(facing, width, height, viewfinderSurface);
+Java_com_mirror2922_ecvl_NativeLib_startNativeCamera(JNIEnv *env, jobject, jint facing, jint width, jint height, jobject viewfinderSurface, jobject mlKitSurface) {
+    return startNativeCamera(facing, width, height, viewfinderSurface, mlKitSurface);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -80,6 +80,15 @@ Java_com_mirror2922_ecvl_NativeLib_getNativeDetectionsBinary(JNIEnv *env, jobjec
     if (count > 0) {
         env->SetFloatArrayRegion(result, 0, count, buffer);
     }
+    return result;
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_mirror2922_ecvl_NativeLib_getPerfMetricsBinary(JNIEnv *env, jobject) {
+    float buffer[4];
+    getPerfMetricsBinary(buffer);
+    jfloatArray result = env->NewFloatArray(4);
+    env->SetFloatArrayRegion(result, 0, 4, buffer);
     return result;
 }
 

@@ -6,7 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mirror2922.ecvl.viewmodel.AppMode
 import com.mirror2922.ecvl.viewmodel.BeautyViewModel
 
@@ -16,46 +18,84 @@ fun AppHud(viewModel: BeautyViewModel, modifier: Modifier = Modifier) {
 
     Surface(
         color = Color.Black.copy(alpha = 0.6f),
-        shape = MaterialTheme.shapes.medium,
-        modifier = modifier.padding(16.dp)
+        shape = MaterialTheme.shapes.small,
+        modifier = modifier.padding(8.dp)
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            // Shared info
-            HudText("FPS", "%.1f".format(viewModel.currentFps), Color.Green)
-            HudText("Capture", viewModel.actualCameraSize, Color.White)
-
-            when (viewModel.currentMode) {
-                AppMode.AI -> {
-                    HudText("Inference", viewModel.actualBackendSize, Color.Yellow)
-                    HudText("Model", viewModel.currentModelId, Color.Cyan)
-                    HudText("Backend", "${viewModel.inferenceEngine} (${viewModel.hardwareBackend})", Color.Magenta)
-                    HudText("Latency", "${viewModel.inferenceTime}ms", Color.White)
-                    
-                    // Hardware Usage based on Backend
-                    when (viewModel.hardwareBackend) {
-                        "CPU" -> HudText("CPU Usage", "${(viewModel.cpuUsage * 100).toInt()}%", Color(0xFFFFA500))
-                        "GPU (OpenCL)" -> HudText("GPU Usage", "${(viewModel.gpuUsage * 100).toInt()}%", Color.Red)
-                        "NPU (NNAPI)" -> HudText("NPU Usage", "${(viewModel.npuUsage * 100).toInt()}%", Color.Green)
-                    }
-                }
-                AppMode.FACE -> {
-                    HudText("Processing", viewModel.actualBackendSize, Color.Yellow)
-                    HudText("Faces", "${viewModel.detectedFaces.size}", Color.Cyan)
-                    // ML Kit usually uses CPU/NPU
-                    HudText("CPU Usage", "${(viewModel.cpuUsage * 100).toInt()}%", Color(0xFFFFA500))
-                }
-                AppMode.Camera -> {
-                    // Only Capture info already shown
-                }
+        Column(
+            modifier = Modifier.padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            // Header Row: FPS and Resolution (Small and tight)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HudText("FPS", "%.1f".format(viewModel.currentFps), if (viewModel.currentFps > 25) Color.Green else Color.Yellow)
+                Spacer(Modifier.width(8.dp))
+                HudText("RES", viewModel.actualCameraSize, Color.White)
             }
+
+            // Mode Specific Content
+            when (viewModel.currentMode) {
+                AppMode.AI -> YoloHudCompact(viewModel)
+                AppMode.FACE -> FaceHudCompact(viewModel)
+                AppMode.Camera -> CameraHudCompact(viewModel)
+            }
+
+            // Hardware Load (Only relevant one)
+            DynamicHardwareIndicator(viewModel)
         }
+    }
+}
+
+@Composable
+private fun YoloHudCompact(viewModel: BeautyViewModel) {
+    Row {
+        HudText("LAT", "${viewModel.inferenceTime}ms", Color.White)
+        Spacer(Modifier.width(8.dp))
+        HudText("MDL", viewModel.currentModelId.take(8), Color.Cyan)
+    }
+}
+
+@Composable
+private fun FaceHudCompact(viewModel: BeautyViewModel) {
+    HudText("FACE", "${viewModel.detections.size} detected", Color.Cyan)
+}
+
+@Composable
+private fun CameraHudCompact(viewModel: BeautyViewModel) {
+    HudText("FLT", viewModel.selectedFilter, Color(0xFF00BFFF))
+}
+
+@Composable
+private fun DynamicHardwareIndicator(viewModel: BeautyViewModel) {
+    val backend = viewModel.hardwareBackend
+    // Map backend to displayed usage
+    val (label, usage) = when {
+        backend.contains("NPU") -> "NPU" to viewModel.npuUsage
+        backend.contains("GPU") -> "GPU" to viewModel.gpuUsage
+        else -> "CPU" to viewModel.cpuUsage
+    }
+    
+    Column(modifier = Modifier.width(100.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, fontSize = 8.sp, color = Color.LightGray)
+            Text("${(usage * 100).toInt()}%", fontSize = 8.sp, color = Color.White)
+        }
+        LinearProgressIndicator(
+            progress = { usage },
+            modifier = Modifier.fillMaxWidth().height(2.dp),
+            color = if (usage > 0.8f) Color.Red else Color.Green,
+            trackColor = Color.White.copy(alpha = 0.1f)
+        )
     }
 }
 
 @Composable
 private fun HudText(label: String, value: String, valueColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("$label: ", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
-        Text(value, style = MaterialTheme.typography.labelSmall, color = valueColor)
+        Text("$label:", fontSize = 9.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(2.dp))
+        Text(value, fontSize = 9.sp, color = valueColor)
     }
 }

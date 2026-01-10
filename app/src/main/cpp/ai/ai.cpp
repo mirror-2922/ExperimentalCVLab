@@ -97,13 +97,37 @@ int getNativeDetectionsBinary(float* outData, int maxCount) {
     return count;
 }
 
-bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface) {
+bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface, jobject mlKitSurface) {
     if (!nativeCamera) nativeCamera = make_unique<NativeCamera>();
-    return nativeCamera->start(facing, width, height, viewfinderSurface);
+    return nativeCamera->start(facing, width, height, viewfinderSurface, mlKitSurface);
 }
 
 void stopNativeCamera() {
     if (nativeCamera) nativeCamera->stop();
+}
+
+// Performance Tracking
+static float lastFps = 0.0f;
+static float lastInferenceTime = 0.0f;
+static int lastWidth = 0;
+static int lastHeight = 0;
+static mutex perfMutex;
+
+void updatePerfMetrics(float fps, float inferenceTime, int w, int h) {
+    lock_guard<mutex> lock(perfMutex);
+    lastFps = fps;
+    lastInferenceTime = inferenceTime;
+    lastWidth = w;
+    lastHeight = h;
+}
+
+int getPerfMetricsBinary(float* outData) {
+    lock_guard<mutex> lock(perfMutex);
+    outData[0] = lastFps;
+    outData[1] = lastInferenceTime;
+    outData[2] = (float)lastWidth;
+    outData[3] = (float)lastHeight;
+    return 4;
 }
 
 void updateNativeConfig(int mode, const string& filter) {
