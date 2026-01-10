@@ -24,6 +24,7 @@ class NativeLib {
     external fun initYolo(modelPath: String): Boolean
     external fun setInferenceEngine(engine: String)
     external fun setHardwareBackend(backend: String)
+    external fun isNpuAvailable(): Boolean
     external fun yoloInference(matAddr: Long, confidence: Float, iou: Float, activeClassIds: IntArray): String
 
     // Efficient conversion

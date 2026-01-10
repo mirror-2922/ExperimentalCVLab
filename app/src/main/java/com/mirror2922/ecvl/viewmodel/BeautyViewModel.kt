@@ -24,10 +24,17 @@ data class ModelInfo(
     var downloadProgress: Float = 0f
 )
 
+data class Detection(
+    val label: String,
+    val confidence: Float,
+    val boundingBox: android.graphics.RectF, // Normalized [0.0, 1.0]
+    val id: Int? = null
+)
+
 data class YoloResultData(
     val label: String,
     val confidence: Float,
-    val box: List<Int> // [x, y, w, h]
+    val box: List<Int> // [x, y, w, h] in pixels of AI input
 )
 
 class BeautyViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,25 +46,15 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     
     // Resolution
     var cameraResolution by mutableStateOf(prefs.getString("camera_res", "1280x720") ?: "1280x720")
-    var backendResolutionScaling by mutableStateOf(prefs.getBoolean("backend_scaling", false))
-    var targetBackendWidth by mutableStateOf(prefs.getInt("backend_width", 640))
+    
+    // Independent AI Resolution (Refactored)
+    var useIndependentAiResolution by mutableStateOf(prefs.getBoolean("use_independent_ai_res", false))
+    var independentAiWidth by mutableStateOf(prefs.getInt("independent_ai_width", 640))
+    var independentAiHeight by mutableStateOf(prefs.getInt("independent_ai_height", 640))
     
     val standardInferenceWidths = listOf(320, 480, 640, 720, 800, 960, 1024, 1280)
     
-    fun getAvailableInferenceWidths(): List<Int> {
-        val parts = cameraResolution.split("x")
-        if (parts.size < 2) return listOf(640)
-        val minSide = min(parts[0].toInt(), parts[1].toInt())
-        return standardInferenceWidths.filter { it <= minSide }
-    }
-
-    fun updateInferenceWidthConstraint() {
-        val available = getAvailableInferenceWidths()
-        if (available.isNotEmpty() && targetBackendWidth !in available) {
-            targetBackendWidth = available.last()
-            saveSettings()
-        }
-    }
+    fun getAvailableInferenceWidths(): List<Int> = standardInferenceWidths
 
     // Performance Info
     var showDebugInfo by mutableStateOf(true)
@@ -72,6 +69,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var cpuUsage by mutableStateOf(0f)
     var gpuUsage by mutableStateOf(0f)
     var npuUsage by mutableStateOf(0f)
+    var isNpuSupported by mutableStateOf(false)
 
     // State
     var currentMode by mutableStateOf(AppMode.Camera)
@@ -82,7 +80,10 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     var lensFacing by mutableStateOf(prefs.getInt("lens_facing", androidx.camera.core.CameraSelector.LENS_FACING_BACK))
     var isLoading by mutableStateOf(false)
 
-    // ML Kit Results
+    // Unified Results
+    val detections = mutableStateListOf<Detection>()
+
+    // ML Kit Results (Legacy compatibility)
     val detectedFaces = mutableStateListOf<FaceResult>()
     val detectedYoloObjects = mutableStateListOf<YoloResultData>()
 
@@ -115,6 +116,7 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
     
     init {
         updateDownloadedStatus()
+        isNpuSupported = com.mirror2922.ecvl.NativeLib().isNpuAvailable()
     }
 
     fun updateDownloadedStatus() {
@@ -138,12 +140,13 @@ class BeautyViewModel(application: Application) : AndroidViewModel(application) 
             putBoolean("dark_theme", isDarkTheme)
             putBoolean("dynamic_color", useDynamicColor)
             putString("camera_res", cameraResolution)
-            putBoolean("backend_scaling", backendResolutionScaling)
-            putInt("backend_width", targetBackendWidth)
+            putBoolean("use_independent_ai_res", useIndependentAiResolution)
+            putInt("independent_ai_width", independentAiWidth)
+            putInt("independent_ai_height", independentAiHeight)
             putString("hardware_backend", hardwareBackend)
             putString("inference_engine", inferenceEngine)
             putFloat("yolo_conf", yoloConfidence)
-            putFloat("yfloat_iou", yoloIoU)
+            putFloat("yolo_iou", yoloIoU)
             putString("current_model_id", currentModelId)
             putInt("lens_facing", lensFacing)
             apply()

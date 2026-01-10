@@ -74,16 +74,15 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
                 onClick = { navController.navigate("model_management") }
             )
 
-            SettingSwitch("Independent Inference Resolution", viewModel.backendResolutionScaling) { 
-                viewModel.backendResolutionScaling = it 
-                if (it) viewModel.updateInferenceWidthConstraint()
+            SettingSwitch("Independent Inference Resolution", viewModel.useIndependentAiResolution) { 
+                viewModel.useIndependentAiResolution = it 
                 viewModel.saveSettings()
             }
 
-            if (viewModel.backendResolutionScaling) {
+            if (viewModel.useIndependentAiResolution) {
                 SettingItem(
                     title = "Target Inference Width",
-                    subtitle = "Selected: ${viewModel.targetBackendWidth}px",
+                    subtitle = "Selected: ${viewModel.independentAiWidth}px",
                     icon = Icons.Default.ChevronRight,
                     onClick = { showBackendWidthDialog = true }
                 )
@@ -101,7 +100,7 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
             BackendSelector(viewModel)
 
             Spacer(modifier = Modifier.height(32.dp))
-            Text("Experimental CV Lab v1.7.3 | Pure Architecture", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
+            Text("Experimental CV Lab v1.8.0 | Refactored Core", modifier = Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.labelSmall)
         }
     }
 
@@ -113,7 +112,6 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
         selectedItem = viewModel.cameraResolution,
         onItemSelected = { 
             viewModel.cameraResolution = it
-            viewModel.updateInferenceWidthConstraint()
             viewModel.saveSettings()
         },
         itemLabel = { it }
@@ -124,8 +122,12 @@ fun SettingsScreen(navController: NavController, viewModel: BeautyViewModel) {
         onDismiss = { showBackendWidthDialog = false },
         title = "Select Inference Width",
         items = viewModel.getAvailableInferenceWidths(),
-        selectedItem = viewModel.targetBackendWidth,
-        onItemSelected = { viewModel.targetBackendWidth = it; viewModel.saveSettings() },
+        selectedItem = viewModel.independentAiWidth,
+        onItemSelected = { 
+            viewModel.independentAiWidth = it
+            viewModel.independentAiHeight = it // Keep it square for YOLO
+            viewModel.saveSettings() 
+        },
         itemLabel = { "${it}px" }
     )
 }
@@ -161,14 +163,22 @@ private fun BackendSelector(viewModel: BeautyViewModel) {
     val backends = listOf("CPU", "GPU (OpenCL)", "NPU (NNAPI)")
     FlowRow(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         backends.forEach { backend ->
+            val isEnabled = if (backend == "NPU (NNAPI)") viewModel.isNpuSupported else true
             FilterChip(
                 selected = viewModel.hardwareBackend == backend,
+                enabled = isEnabled,
                 onClick = { 
                     viewModel.hardwareBackend = backend
                     NativeLib().setHardwareBackend(backend)
                     viewModel.saveSettings()
                 },
-                label = { Text(backend) },
+                label = { 
+                    if (isEnabled) {
+                        Text(backend)
+                    } else {
+                        Text("$backend (Unsupported)")
+                    }
+                },
                 modifier = Modifier.padding(end = 8.dp)
             )
         }

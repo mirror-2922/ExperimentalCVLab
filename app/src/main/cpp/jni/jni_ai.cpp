@@ -23,10 +23,13 @@ Java_com_mirror2922_ecvl_NativeLib_setInferenceEngine(JNIEnv *env, jobject, jstr
 extern "C" JNIEXPORT void JNICALL
 Java_com_mirror2922_ecvl_NativeLib_setHardwareBackend(JNIEnv *env, jobject, jstring backend) {
     const char* b = env->GetStringUTFChars(backend, nullptr);
-    if (detector) {
-        detector->setBackend(std::string(b));
-    }
+    setBackend(std::string(b));
     env->ReleaseStringUTFChars(backend, b);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_mirror2922_ecvl_NativeLib_isNpuAvailable(JNIEnv *env, jobject) {
+    return isNpuAvailable();
 }
 
 extern "C" JNIEXPORT jstring JNICALL

@@ -37,13 +37,20 @@ bool OpenCVDetector::loadModel(const string& modelPath) {
 void OpenCVDetector::setBackend(const string& backendName) {
     if (!isLoaded) return;
     
-    if (backendName == "GPU (OpenCL)") {
-        net.setPreferableBackend(DNN_BACKEND_OPENCV);
-        net.setPreferableTarget(DNN_TARGET_OPENCL);
-    } else if (backendName == "NPU (NNAPI)") {
-        net.setPreferableBackend(DNN_BACKEND_DEFAULT);
-        net.setPreferableTarget(DNN_TARGET_NPU);
-    } else {
+    try {
+        if (backendName == "GPU (OpenCL)") {
+            net.setPreferableBackend(DNN_BACKEND_OPENCV);
+            net.setPreferableTarget(DNN_TARGET_OPENCL);
+        } else if (backendName == "NPU (NNAPI)") {
+            // TIMVX is the preferred backend for NPU targets in modern OpenCV
+            net.setPreferableBackend(DNN_BACKEND_TIMVX);
+            net.setPreferableTarget(DNN_TARGET_NPU);
+        } else {
+            net.setPreferableBackend(DNN_BACKEND_OPENCV);
+            net.setPreferableTarget(DNN_TARGET_CPU);
+        }
+    } catch (const cv::Exception& e) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenCVDetector", "SetBackend error: %s, falling back to CPU", e.what());
         net.setPreferableBackend(DNN_BACKEND_OPENCV);
         net.setPreferableTarget(DNN_TARGET_CPU);
     }
