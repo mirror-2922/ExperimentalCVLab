@@ -23,7 +23,6 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import org.json.JSONArray
 import java.util.concurrent.Executors
 
 @Composable
@@ -38,8 +37,9 @@ fun CameraView(viewModel: BeautyViewModel) {
         FaceDetection.getClient(options)
     }
     
+    // ImageReader used ONLY as a consumer for processed frames from NDK
     val mlKitReader = remember {
-        ImageReader.newInstance(640, 480, ImageFormat.YUV_420_888, 2)
+        ImageReader.newInstance(640, 640, ImageFormat.YUV_420_888, 2)
     }
 
     // 1. Data Polling
@@ -57,22 +57,6 @@ fun CameraView(viewModel: BeautyViewModel) {
                 viewModel.cpuUsage = HardwareMonitor.getCpuUsage()
                 
                 if (viewModel.currentMode == AppMode.AI) {
-                    val loadFactor = (viewModel.inferenceTime.toFloat() / 33f).coerceIn(0.05f, 1.0f)
-                    when {
-                        viewModel.hardwareBackend.contains("GPU") -> {
-                            viewModel.gpuUsage = loadFactor
-                            viewModel.npuUsage = 0.01f
-                        }
-                        viewModel.hardwareBackend.contains("NPU") -> {
-                            viewModel.npuUsage = loadFactor
-                            viewModel.gpuUsage = 0.01f
-                        }
-                        else -> {
-                            viewModel.gpuUsage = 0.01f
-                            viewModel.npuUsage = 0.01f
-                        }
-                    }
-
                     val data = nativeLib.getNativeDetectionsBinary()
                     if (data.isNotEmpty()) {
                         val objCount = data[0].toInt()
@@ -94,8 +78,6 @@ fun CameraView(viewModel: BeautyViewModel) {
                         viewModel.detections.clear()
                         viewModel.detections.addAll(detections)
                     }
-                } else if (viewModel.currentMode == AppMode.Camera) {
-                    viewModel.detections.clear()
                 }
             } catch (e: Exception) {
                 Log.e("CameraView", "Polling error", e)
@@ -104,7 +86,7 @@ fun CameraView(viewModel: BeautyViewModel) {
         }
     }
 
-    // 2. ML Kit Listener
+    // 2. ML Kit Listener (Consuming from NDK distributed stream)
     DisposableEffect(mlKitReader) {
         val listener = ImageReader.OnImageAvailableListener { reader ->
             val image = try { reader.acquireLatestImage() } catch (e: Exception) { null } ?: return@OnImageAvailableListener
@@ -140,11 +122,10 @@ fun CameraView(viewModel: BeautyViewModel) {
     // 3. Camera Lifecycle
     DisposableEffect(viewModel.lensFacing, viewModel.cameraResolution, viewfinderSurface) {
         val vs = viewfinderSurface
-        var cameraStarted = false
         if (vs != null) {
             val resParts = viewModel.cameraResolution.split("x")
             val facing = if (viewModel.lensFacing == 1) 1 else 0
-            cameraStarted = nativeLib.startNativeCamera(facing, resParts[0].toInt(), resParts[1].toInt(), vs, mlKitReader.surface)
+            nativeLib.startNativeCamera(facing, resParts[0].toInt(), resParts[1].toInt(), vs, mlKitReader.surface)
             
             nativeLib.updateNativeConfig(
                 if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0,
@@ -153,9 +134,7 @@ fun CameraView(viewModel: BeautyViewModel) {
         }
         
         onDispose {
-            if (cameraStarted) {
-                nativeLib.stopNativeCamera()
-            }
+            nativeLib.stopNativeCamera()
         }
     }
 
@@ -165,8 +144,12 @@ fun CameraView(viewModel: BeautyViewModel) {
             if (viewModel.currentMode == AppMode.AI) 1 else if (viewModel.currentMode == AppMode.FACE) 2 else 0,
             viewModel.selectedFilter
         )
+        if (viewModel.currentMode == AppMode.Camera) {
+            viewModel.detections.clear()
+        }
     }
 
+    // 5. Native Viewfinder
     AndroidView(
         factory = { ctx ->
             SurfaceView(ctx).apply {
@@ -175,7 +158,7 @@ fun CameraView(viewModel: BeautyViewModel) {
                     override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, h1: Int) { viewfinderSurface = h.surface }
                     override fun surfaceDestroyed(h: SurfaceHolder) { 
                         viewfinderSurface = null 
-                        nativeLib.stopNativeCamera() // Fail-safe stop
+                        nativeLib.stopNativeCamera()
                     }
                 })
             }

@@ -73,7 +73,6 @@ vector<YoloResult> runYoloInference(long matAddr, float confThreshold, float iou
     return {};
 }
 
-// 供 NativeCamera 内部调用，将结果直接转为二进制
 void updateDetectionsBinary(const vector<YoloResult>& results) {
     lock_guard<mutex> lock(resultMutex);
     binaryResults.clear();
@@ -83,8 +82,7 @@ void updateDetectionsBinary(const vector<YoloResult>& results) {
     }
     binaryResults.push_back((float)results.size());
     for (const auto& res : results) {
-        // 我们假设这里已经归一化了，或者由 NativeCamera 完成
-        binaryResults.push_back(0.0f); // 临时 ID，如果需要的话可以从 COCO 映射
+        binaryResults.push_back(0.0f);
         binaryResults.push_back(res.confidence);
         binaryResults.push_back(res.x); 
         binaryResults.push_back(res.y);
@@ -103,11 +101,11 @@ int getNativeDetectionsBinary(float* outData, int maxCount) {
 
 bool startNativeCamera(int facing, int width, int height, jobject viewfinderSurface, jobject mlKitSurface) {
     if (!nativeCamera) nativeCamera = make_unique<NativeCamera>();
-    return nativeCamera->start(facing, width, height, viewfinderSurface, mlKitSurface);
+    return nativeCamera->open(facing, width, height, viewfinderSurface, mlKitSurface);
 }
 
 void stopNativeCamera() {
-    if (nativeCamera) nativeCamera->stop();
+    if (nativeCamera) nativeCamera->close();
 }
 
 // Performance Tracking

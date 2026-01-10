@@ -15,59 +15,53 @@
 class NativeCamera {
 public:
     NativeCamera();
-    ~NativeCamera();
+    virtual ~NativeCamera();
 
-    bool start(int facing, int width, int height, jobject viewfinderSurface, jobject mlKitSurface);
-    void stop();
+    bool open(int facing, int width, int height, jobject viewfinderSurface, jobject mlKitSurface);
+    void close();
+
+    // 状态回调由具体的逻辑消费
+    virtual void on_image(const cv::Mat& rgba);
 
 private:
-    ACameraManager* cameraManager = nullptr;
-    ACameraDevice* cameraDevice = nullptr;
+    ACameraManager* camera_manager = nullptr;
+    ACameraDevice* camera_device = nullptr;
+    ACaptureRequest* capture_request = nullptr;
+    ACameraCaptureSession* capture_session = nullptr;
+    ACaptureSessionOutputContainer* output_container = nullptr;
     
-    ANativeWindow* viewfinderWindow = nullptr;
-    ANativeWindow* mlKitWindow = nullptr;
-    AImageReader* viewfinderReader = nullptr;
-    AImageReader* aiReader = nullptr;
+    // 唯一的硬件输出目标
+    AImageReader* image_reader = nullptr;
+    ANativeWindow* image_reader_surface = nullptr;
+    ACameraOutputTarget* image_reader_target = nullptr;
+    ACaptureSessionOutput* image_reader_session_output = nullptr;
 
-    ACaptureRequest* captureRequest = nullptr;
-    ACameraCaptureSession* captureSession = nullptr;
-    ACaptureSessionOutputContainer* outputContainer = nullptr;
-    
-    ACameraOutputTarget* viewfinderTarget = nullptr;
-    ACameraOutputTarget* mlKitTarget = nullptr;
-    ACameraOutputTarget* aiTarget = nullptr;
-
-    ACaptureSessionOutput* sessionOutputViewfinder = nullptr;
-    ACaptureSessionOutput* sessionOutputMlKit = nullptr;
-    ACaptureSessionOutput* sessionOutputAi = nullptr;
+    // UI 和 ML Kit 的渲染窗口
+    ANativeWindow* viewfinder_window = nullptr;
+    ANativeWindow* mlkit_window = nullptr;
 
     // Callbacks
+    ACameraDevice_StateCallbacks device_callbacks;
+    ACameraCaptureSession_stateCallbacks session_callbacks;
+    AImageReader_ImageListener reader_listener;
+
     static void onDeviceDisconnected(void* context, ACameraDevice* device);
     static void onDeviceError(void* context, ACameraDevice* device, int error);
     static void onSessionClosed(void* context, ACameraCaptureSession* session);
     static void onSessionReady(void* context, ACameraCaptureSession* session);
     static void onSessionActive(void* context, ACameraCaptureSession* session);
-    
-    static void onViewfinderImage(void* context, AImageReader* reader);
-    static void onAiImage(void* context, AImageReader* reader);
-    
-    void processViewfinderFrame(AImageReader* reader);
-    void processAiFrame(AImageReader* reader);
+    static void onImageAvailable(void* context, AImageReader* reader);
 
-    ACameraDevice_StateCallbacks deviceCallbacks;
-    ACameraCaptureSession_stateCallbacks sessionCallbacks;
+    int camera_facing = 0;
+    int sensor_orientation = 0;
+    int current_width = 0;
+    int current_height = 0;
 
-    int currentWidth = 0;
-    int currentHeight = 0;
-    int sensorOrientation = 0;
-    int lensFacing = 0;
+    std::mutex window_mutex;
+    std::atomic<bool> is_running{false};
 
-    std::mutex windowMutex;
-    std::atomic<bool> cameraActive{false};
-
-    // Perf metrics
-    std::chrono::steady_clock::time_point lastFrameTime;
-    float currentFps = 0;
-    int frameCount = 0;
-    std::chrono::steady_clock::time_point lastFpsUpdateTime;
+    // Perf
+    std::chrono::steady_clock::time_point last_fps_time;
+    int frame_count = 0;
+    float current_fps = 0;
 };
